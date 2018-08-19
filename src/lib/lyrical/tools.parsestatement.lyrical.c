@@ -1,0 +1,4972 @@
+
+// ---------------------------------------------------------------------
+// Copyright (c) William Fonkou Tambe
+// 
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+// 
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+// 
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// ---------------------------------------------------------------------
+
+
+// Function used to swap
+// the values of two variables.
+void swapvalues (void* v1, void* v2) {
+	*(uint*)v1 ^= *(uint*)v2;
+	*(uint*)v2 ^= *(uint*)v1;
+	*(uint*)v1 ^= *(uint*)v2;
+}
+
+
+// The difference between a boundary
+// and a bitselect is that a bitselect can have zeros
+// in the least significant bits, while
+// the ones in the boundary start from
+// the least significant bit.
+// 
+// Just as a side note; the load and store
+// instructions do truncations automatically
+// depending on the type of the load or
+// store instruction that was used; effectively
+// applying a boundary.
+// ei: ld8 loads 8bits value, etc...
+
+// This function create a boundary from a size.
+// ei: a size of 1byte, create the following boundary 0b11111111;
+// A size of 2 bytes create a boundary where
+// all the 16 least significant bits are 1.
+u64 sizetoboundary (uint size) {
+	
+	if (!size) throwerror(stringfmt("internal error: %s: null size", __FUNCTION__).ptr);
+	
+	u64 boundary = 0;
+	
+	while (1) {
+		boundary |= 0xff;
+		if (--size) boundary <<= 8;
+		else break;
+	}
+	
+	return boundary;
+}
+
+
+// This function create a boundary from a bitselect.
+u64 bitselecttoboundary (u64 bitselect) {
+	
+	while (!(bitselect&1)) bitselect >>= 1;
+	
+	return bitselect;
+}
+
+
+// This function will compute how many zeros
+// I have between the msb and the first bit
+// from the msb having a value of 1; ei:
+// 0b11 will yield 30; 0b1000 will yield 28bits.
+uint countofmsbzeros (u64 n) {
+	
+	if (!n) return bitsizeofgpr;
+	
+	uint i = 0;
+	
+	while (!(n&msbone)) {
+		n <<= 1;
+		++i;
+	}
+	
+	return i;
+}
+
+
+// This function will compute how many zeros
+// I have between the lsb and the first bit
+// from the lsb having a value of 1; ei:
+// 0b11000 will yield 3, 0b110 will yield 1.
+uint countoflsbzeros (u64 n) {
+	
+	if (!n) return bitsizeofgpr;
+	
+	uint i = 0;
+	
+	while (!(n&1)) {
+		n >>= 1;
+		++i;
+	}
+	
+	return i;
+}
+
+
+// This function will compute how many ones
+// I have between the lsb and the first bit
+// from the lsb having a value of 0; ei:
+// 0b00111 will yield 3, 0b001 will yield 1.
+uint countoflsbones (u64 n) {
+	
+	u64 sizetoboundarysizeofgpr = sizetoboundary(sizeofgpr);
+	
+	n &= sizetoboundarysizeofgpr;
+	
+	if (n == sizetoboundarysizeofgpr) return bitsizeofgpr;
+	
+	uint i = 0;
+	
+	while (n&1) {
+		n >>= 1;
+		++i;
+	}
+	
+	return i;
+}
+
+
+// This function compute the byte size of the
+// sign extended value given as argument. ei:
+// For a value of 0x7fff, 2 will be returned.
+// For a value of 0xffff, 3 will be returned.
+uint countofsignextendedbytes (u64 n) {
+	
+	if (!n || n == -(u64)1) return sizeofgpr;
+	
+	uint i = 0;
+	
+	u64 bit = (n&msbone);
+	
+	do {
+		n <<= 1;
+		++i;
+		
+	} while (bit == (n&msbone));
+	
+	return ((bitsizeofgpr-i)/8)+1;
+}
+
+
+// This function compute the byte size of the
+// zero extended value given as argument. ei:
+// For a value of 0x7fff, 2 will be returned.
+// For a value of 0xffff, 2 will be returned.
+// For a value of 0x1ffff, 3 will be returned.
+uint countofzeroextendedbytes (u64 n) {
+	return (bitsizeofgpr-countofmsbzeros(n))/8;
+}
+
+
+// Return the null-terminated string
+// of the unsigned type that is large enough
+// for the bytesize given as argument.
+string largeenoughunsignednativetype (uint sz) {
+	return
+		(sz > 4 && sizeofgpr >= 8) ? nativetype[NATIVETYPEU64].name :
+		(sz > 2 && sizeofgpr >= 4) ? nativetype[NATIVETYPEU32].name :
+		(sz > 1 && sizeofgpr >= 2) ? nativetype[NATIVETYPEU16].name :
+		           nativetype[NATIVETYPEU8].name;
+}
+
+
+// Return the null-terminated string
+// of the signed type that is large enough
+// for the bytesize given as argument.
+string largeenoughsignednativetype (uint sz) {
+	return
+		(sz > 4 && sizeofgpr >= 8) ? nativetype[NATIVETYPES64].name :
+		(sz > 2 && sizeofgpr >= 4) ? nativetype[NATIVETYPES32].name :
+		(sz > 1 && sizeofgpr >= 2) ? nativetype[NATIVETYPES16].name :
+		           nativetype[NATIVETYPES8].name;
+}
+
+
+// This function return true for
+// address variables and constant variables
+// because their values do not come from memory
+// since they are generated by the compiler,
+// hence they are readonly.
+uint isvarreadonly (lyricalvariable* v) {
+	
+	if (v->name.ptr[0] == '0' || v->name.ptr[1] == '&') return 1;
+	
+	return 0;
+}
+
+
+// This function is used to generate a unique label name.
+uint newgenericlabelid () {
+	
+	static uint endofblockid = 0;
+	
+	// There is no need to check
+	// whether (endofblockid == -1),
+	// because it would never happen,
+	// since endofblockid is uint and
+	// (uint)-1 is the total size of
+	// the virtual memory and I cannot have
+	// a program which is all label and
+	// which cover the entire virtual memory.
+	
+	return ++endofblockid;
+}
+
+
+// Struct used for the result of readcharconstant().
+typedef struct {
+	// Value of the constant parsed.
+	u64 n;
+	
+	// Number of characters
+	// in the constant.
+	uint sz;
+	
+} readcharconstantresult;
+
+// This function read a character or multi-character constant;
+// curpos must be at the opening single-quote character.
+readcharconstantresult readcharconstant () {
+	
+	readcharconstantresult r = {
+		.n = 0,
+		.sz = 0
+	};
+	
+	++curpos; // Set curpos after the single quote.
+	
+	do {
+		u8* savedcurpos = curpos;
+		
+		// I check whether I have an escaped character.
+		// Valid escapes are: '\\', '\n', '\t' and '\xx' where xx is an hexadecimal value.
+		if (*curpos == '\\') {
+			
+			++curpos; // Set curpos after the escaping character.
+			
+			// Check if the escape was being done using a two digits hexadecimal value.
+			if (((curpos[0] >= '0' && curpos[0] <= '9') || (curpos[0] >= 'a' && curpos[0] <= 'f')) &&
+				((curpos[1] >= '0' && curpos[1] <= '9') || (curpos[1] >= 'a' && curpos[1] <= 'f'))) {
+				
+				u8 charval = 0;
+				
+				// Convert the first digit.
+				if (curpos[0] >= '0' && curpos[0] <= '9')
+					charval = ((charval<<4) + (curpos[0] - '0')); // <<4 do a multiplication by 16.
+					
+				else if (curpos[0] >= 'a' && curpos[0] <= 'f')
+					charval = ((charval<<4) + (curpos[0] - 'a' + 10)); // <<4 do a multiplication by 16.
+				
+				// Convert the second digit.
+				if (curpos[1] >= '0' && curpos[1] <= '9')
+					charval = ((charval<<4) + (curpos[1] - '0')); // <<4 do a multiplication by 16.
+					
+				else if (curpos[1] >= 'a' && curpos[1] <= 'f')
+					charval = ((charval<<4) + (curpos[1] - 'a' + 10)); // <<4 do a multiplication by 16.
+				
+				r.n = ((r.n<<8) | charval);
+				
+				curpos += 2; // Set curpos after the two hexadecimal digits of the escape.
+				
+			} else if (*curpos == 'n') {
+				
+				r.n = ((r.n<<8) | '\n');
+				
+				++curpos; // Set curpos after the character read.
+				
+			} else if (*curpos == 't') {
+				
+				r.n = ((r.n<<8) | '\t');
+				
+				++curpos; // Set curpos after the character read.
+				
+			} else if (*curpos == '\'') {
+				
+				r.n = ((r.n<<8) | '\'');
+				
+				++curpos; // Set curpos after the character read.
+				
+			} else if (*curpos == '\\') {
+				
+				r.n = ((r.n<<8) | '\\');
+				
+				++curpos; // Set curpos after the character read.
+				
+			} else if (!*curpos) {
+				
+				curpos = savedcurpos;
+				
+				throwerror("invalid character constant");
+				
+			} else throwerror("incorrect character constant");
+			
+		} else {
+			
+			r.n = ((r.n<<8) | *curpos);
+			
+			++curpos; // Set curpos after the character read.
+		}
+		
+		if (++r.sz > sizeofgpr) {
+			
+			curpos = savedcurpos;
+			
+			throwerror("overflowing character constant");
+		}
+		
+	} while (*curpos != '\'');
+	
+	++curpos; // Set curpos after the closing single quote.
+	
+	skipspace();
+	
+	// When I get here the character or multi-character
+	// constant value is saved in r.n; I return it.
+	return r;
+}
+
+
+// This function skip a symbol.
+// skipspace() is done before returning.
+// Note that this function is not made
+// to skip enum constant values which
+// use uppercase letters.
+void skipsymbol () {
+	
+	if (*curpos >= 'a' && *curpos <= 'z') {
+		
+		do ++curpos; while ((*curpos >= '0' && *curpos <= '9') || (*curpos >= 'a' && *curpos <= 'z'));
+		
+		skipspace();
+	}
+}
+
+
+// This function skip a block between
+// braces; curpos is expected
+// to be at the opening brace.
+// skipspace() is called after
+// the closing brace.
+void skipbraceblock () {
+	// Keep track of the number
+	// of brace sign encountered.
+	uint brace = 0;
+	
+	while (1) {
+		
+		if (*curpos == '{') {
+			// There is no need to check whether the variable
+			// brace (which is a uint) will overflow, otherwise
+			// it would mean that the entire memory space contain
+			// only brace characters, which is impossible.
+			++brace;
+			
+			++curpos;
+			
+		} else if (*curpos == '}') {
+			
+			++curpos;
+			
+			if (--brace == 0) {
+				// If I get here it mean that I reached
+				// the end of the enum block to skip.
+				
+				skipspace();
+				return;
+			}
+			
+		} else if (*curpos == '\'') skipcharconstant(DONOTSKIPSPACEAFTERCHARCONST);
+		else if (*curpos == '"') skipstringconstant(DONOTSKIPSPACEAFTERSTRING);
+		else if (*curpos) ++curpos;
+		else return;
+		
+		skipspace();
+	}
+}
+
+
+// Struct used for the result of readnumber().
+typedef struct {
+	// Value of the number parsed.
+	u64 n;
+	
+	// This field is set to 1
+	// if a number was read
+	// otherwise it is set to 0.
+	uint wasread;
+	
+} readnumberresult;
+
+// This function parse a number.
+readnumberresult readnumber () {
+	
+	readnumberresult r = {
+		.n = 0,
+		.wasread = 0
+	};
+	
+	u64 n;
+	
+	uint isoverflowing () {
+		// If n is greater than maxtargetuintvalue or
+		// is less than r.n, then I have an overflow.
+		return (n > maxtargetuintvalue || n < r.n);
+	}
+	
+	u8* savedcurpos = curpos;
+	
+	if (*curpos == '0') {
+		
+		r.wasread = 1;
+		
+		if (!*++curpos) return r;
+		
+		if (*curpos == 'x') {
+			
+			++curpos;
+			
+			// If I get here the string pointed
+			// by curpos is a hexadecimal number.
+			while (1) {
+				
+				if (*curpos >= '0' && *curpos <= '9') {
+					
+					n = (r.n << 4) + (*curpos - '0'); // <<4 do a multiplication by 16.
+					
+					if (isoverflowing()) {
+						curpos = savedcurpos;
+						throwerror("overflowing hexadecimal number");
+					}
+					
+					r.n = n;
+					
+					++curpos;
+					
+				} else if (*curpos >= 'a' && *curpos <= 'f') {
+					
+					n = (r.n << 4) + ((*curpos - 'a') + 10); // <<4 do a multiplication by 16.
+					
+					if (isoverflowing()) {
+						curpos = savedcurpos;
+						throwerror("overflowing hexadecimal number");
+					}
+					
+					r.n = n;
+					
+					++curpos;
+					
+				} else break;
+			}
+			
+		} else if (*curpos == 'b') {
+			
+			++curpos;
+			
+			// If I get here the string pointed by curpos is a binary number.
+			while (*curpos == '0' || *curpos == '1') {
+				
+				n = (r.n << 1) + (*curpos - '0'); // <<1 do a multiplication by 2.
+				
+				if (isoverflowing()) {
+					curpos = savedcurpos;
+					throwerror("overflowing binary number");
+				}
+				
+				r.n = n;
+				
+				++curpos;
+			}
+			
+		} else if (*curpos == 'o') {
+			
+			++curpos;
+			
+			// If I get here the string pointed by curpos is an octale number.
+			while (*curpos >= '0' && *curpos <= '7') {
+				
+				n = (r.n << 3) + (*curpos - '0'); // <<3 do a multiplication by 8.
+				
+				if (isoverflowing()) {
+					curpos = savedcurpos;
+					throwerror("overflowing octale number");
+				}
+				
+				r.n = n;
+				
+				++curpos;
+			}
+			
+		} else if (*curpos >= '0' && *curpos <= '9') {
+			curpos = savedcurpos;
+			throwerror("decimal number first digit cannot be 0");
+		}
+		
+		skipspace();
+		
+		return r;
+	}
+	
+	// If I get here, I have a decimal number.
+	
+	while (*curpos >= '0' && *curpos <= '9') {
+		
+		n = (r.n * 10) + (*curpos - '0');
+		
+		if (isoverflowing()) {
+			curpos = savedcurpos;
+			throwerror("overflowing decimal number");
+		}
+		
+		r.n = n;
+		
+		++curpos;
+	}
+	
+	r.wasread = (curpos != savedcurpos);
+	
+	skipspace();
+	
+	return r;
+}
+
+
+// This function check whether I have
+// the keyword pointed by the argument s,
+// at the current position pointed by curpos.
+// If true, curpos is set after the keyword,
+// skipspace() is called and 1 is returned,
+// otherwise curpos is left untouched and 0 is returned.
+// A keyword is made up of lowercase alpha-numeric
+// characters and cannot start with a number.
+// The string pointed by the argument s must
+// contain at least a single character.
+uint checkforkeyword (u8* s) {
+	// I save curpos so I can restore it if I didn't match the keyword.
+	u8* savedcurpos = curpos;
+	
+	while (*curpos == *s) {
+		++curpos;
+		++s;
+		
+		if (!*s) {
+			// I get here if I am done checking all the characters
+			// of the keyword pointed by the argument s; Here I make
+			// sure that the character that come next in *curpos is
+			// not part of the keyword otherwise it would mean that
+			// what is pointed by the argument s do not match what
+			// was initially pointed by curpos.
+			if (	(*curpos < '0' || *curpos > '9') &&
+				(*curpos < 'a' || *curpos > 'z') &&
+				(*curpos < 'A' || *curpos > 'Z')) {
+				
+				skipspace();
+				return 1;
+			}
+			
+			curpos = savedcurpos;
+			
+			return 0;
+		}
+	}
+	
+	curpos = savedcurpos;
+	
+	return 0;
+}
+
+
+// This function generate a tempvar name
+// which is formed using the string equivalent
+// of the address of its struct lyricalvariable
+// to which '$' is prefixed and suffixed;
+// ei: "$45468479$".
+string generatetempvarname (lyricalvariable* v) {
+	// Prefixing and suffixing the address string
+	// with '$' allow to safely find the string
+	// in the name of a dereference or address variable
+	// by simply using stringsearch() within
+	// varfreetempvarrelated(); Without the suffixing
+	// of '$' I could match part of a tempvar name
+	// instead of its entire name.
+	return stringfmt("$%d$", (uint)v);
+}
+
+
+// I declare it here because it is used
+// by searchfunc() and searchsymbol().
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto uint scopeiseq (uint* s1, uint* s2, uint scopedepth);
+
+
+// This function will search through
+// the array nativefcall for a native
+// operator that match the signature passed
+// as argument, and return a value which
+// correspond to an index minus 1 in nativefcall.
+// Null is returned if a match could not be found.
+uint searchnativeop (string fcallsignature) {
+	
+	uint nativeop = 0;
+	
+	// I search if there is any native
+	// operation which match the call signature.
+	while (1) {
+		
+		if (pamsynmatch2(nativefcall[nativeop], fcallsignature.ptr, stringmmsz(fcallsignature)).start) {
+			// Here I adjust the index; which mean that
+			// the first element in the array nativefcall will
+			// correspond to the value 1 for nativeop.
+			++nativeop;
+			return nativeop;
+		}
+		
+		// I increment nativeop and
+		// make sure that I am not going to index a
+		// location outside of the array nativefcall;
+		// if I do, I break out of the loop.
+		// The expression sizeof(nativefcall)/sizeof(pamsyntokenized)
+		// compute the number of native operation
+		// pamsyntokenized in the array nativefcall.
+		if (++nativeop >= (sizeof(nativefcall)/sizeof(pamsyntokenized))) return 0;
+	}
+}
+
+
+// Enumerated constant which determine the
+// search range of searchfunc() and searchsymbol().
+typedef enum {
+	// Limit the search to the current scope.
+	INCURRENTSCOPEONLY,
+	
+	// Limit the search to the current function.
+	INCURRENTFUNCTIONONLY,
+	
+	// The search is done in the current function and in every
+	// reacheable parent function all the way to the root function.
+	INCURRENTANDPARENTFUNCTIONS
+	
+} searchrange;
+
+// Structure used by searchfunc()
+// to return the result of its search.
+typedef struct {
+	// When a function is found, either
+	// the field nativeop or f will be
+	// set to a non-null value, not both.
+	
+	// When non-null, the value of this field
+	// correspond to the index minus 1 in nativefcall.
+	// Each element in the array nativefcall is
+	// a pamsyntokenized used to match native operations.
+	uint nativeop;
+	
+	// When non-null this field point to the function found.
+	lyricalfunction* f;
+	
+	// This field determine in which nth parent
+	// of the current function, the function
+	// pointed by the field f is in.
+	// Hence when a lyricalfunction within currentfunc
+	// is returned, this field is 0; when currentfunc or
+	// any of its siblings is returned, this field is 1;
+	// when the immediate parent of currentfunc or any
+	// of its siblings is returned, this field is 2; and so on.
+	uint funclevel;
+	
+} searchfuncresult;
+
+// This function will search through previously
+// created function for a function which match the
+// function call signature passed as argument.
+// If it match then the function is callable using
+// that call signature.
+// An example of function call signature string
+// is "myfunc|uint*|u8|".
+// Note that in the signature string, the name of
+// the operator or function and its arguments are
+// separated by '|' instead of commas, opening and
+// closing paranthesis which would create conflict
+// since those same characters are used
+// in a pointer to function type.
+searchfuncresult searchfunc (string fcallsignature, searchrange range) {
+	// The search is done in the following order:
+	// - Search through functions which are
+	// previously created children of currentfunc
+	// using the pointer lastchildofcurrentfunc.
+	// - Search through parent functions and
+	// their siblings; the search is started
+	// from currentfunc.
+	// - Search through native operators.
+	
+	lyricalfunction* search (lyricalfunction* f, uint scopedepth, uint* scope) {
+		// Because the search is always
+		// done from the last to the first
+		// created child of a function,
+		// there is no need to implement
+		// always going through all sibling
+		// functions when range != INCURRENTSCOPEONLY,
+		// computing scopedepth differences
+		// (in the manner similar as it is done
+		// in searchcatchablelabellinkedlist()),
+		// in order to determine the closest function.
+		while (f) {
+			// In addition to matching
+			// the call signature I also
+			// make sure that the function
+			// is in a reachable scope.
+			if (range == INCURRENTSCOPEONLY) {
+				
+				if (f->fcall.ptr &&
+					f->scopedepth == scopedepth &&
+					pamsynmatch2(f->fcall, fcallsignature.ptr, stringmmsz(fcallsignature)).start &&
+					scopeiseq(f->scope, scope, f->scopedepth)) return f;
+				
+			} else {
+				
+				if (f->fcall.ptr &&
+					f->scopedepth <= scopedepth &&
+					pamsynmatch2(f->fcall, fcallsignature.ptr, stringmmsz(fcallsignature)).start &&
+					scopeiseq(f->scope, scope, f->scopedepth)) return f;
+			}
+			
+			f = f->sibling;
+		}
+		
+		return f;
+	}
+	
+	searchfuncresult result = {
+		.nativeop = 0,
+		.f = 0,
+		.funclevel = 0
+	};
+	
+	if ((result.f = search(lastchildofcurrentfunc, scopecurrent, scope)) ||
+		range == INCURRENTSCOPEONLY || range == INCURRENTFUNCTIONONLY)
+		return result;
+	
+	// If I get here, it mean that I couldn't find
+	// the function locally; I search through
+	// parent functions and their siblings.
+	// The search is started from currentfunc.
+	if ((result.f = currentfunc) != rootfunc) {
+		
+		result.funclevel = 1;
+		
+		while (1) {
+			// When searching through parent functions and
+			// their siblings, the scope tests need to be
+			// done with respect to the scope used with
+			// the parent function and not with respect
+			// to the scope used with the current function;
+			// hence the variables scopedepth and scope
+			// declared within parsestatement() are not used.
+			uint scopedepth = result.f->scopedepth;
+			uint* scope = result.f->scope;
+			
+			lyricalfunction* f;
+			
+			if (f = search(result.f, scopedepth, scope)) {
+				
+				result.f = f;
+				
+				return result;
+				
+			} else if ((result.f = result.f->parent) != rootfunc) {
+				// There is no need to check whether
+				// (result.funclevel == (uint)-1), because
+				// it would never happen, since result.funclevel
+				// is a uint and (uint)-1 is the total size of
+				// the virtual memory and result.funclevel is
+				// increased per function traversed and functions
+				// have a size surely greater than a byte.
+				++result.funclevel;
+				
+			} else break;
+		}
+	}
+	
+	// If I get here, I couldn't find
+	// a matching function; I set null
+	// the fields f and funclevel.
+	result.f = 0;
+	result.funclevel = 0;
+	
+	// result.nativeop will be
+	// set null if a matching native
+	// operator could not be found.
+	result.nativeop = searchnativeop(fcallsignature);
+	
+	return result;
+}
+
+
+// Function used to search through variables
+// that have been previously created.
+lyricalvariable* searchvar (u8* nameptr, uint namesz, searchrange range) {
+	// If the variable to search is "this", and
+	// the function currently being processed is not
+	// the root function, I return a pointer to thisvar;
+	// the value of the argument range is ignored.
+	if (stringiseq6(nameptr, namesz, "this")) {
+		
+		if (currentfunc == rootfunc)
+			throwerror("can only be used within a function definition");
+		else {
+			// Functions where the keyword "this" is used must be
+			// treated as function for which the address is obtained.
+			currentfunc->itspointerisobtained = 1;
+			
+			currentfunc->usethisvar = 1;
+			
+			return &thisvar;
+		}
+	}
+	
+	// If the variable to search is retvar, and
+	// the function currently being processed can
+	// return a variable, I return a pointer to returnvar;
+	// the value of the argument range is ignored.
+	if (stringiseq6(nameptr, namesz, "retvar")) {
+		
+		if (currentfunc == rootfunc || stringiseq2(currentfunc->type, "void"))
+			throwerror("can only be used within a function which return a value");
+		else return &returnvar;
+	}
+	
+	// This function search a circular linkedlist of
+	// variables taking their scope into consideration.
+	lyricalvariable* search (u8* nameptr, uint namesz, lyricalvariable* linkedlist, uint scopedepth, uint* scope) {
+		
+		lyricalvariable* v = linkedlist;
+		
+		if (!scope) {
+			
+			do {
+				if (stringiseq5(nameptr, namesz, v->name))
+					return v;
+				
+			} while ((v = v->next) != linkedlist);
+			
+			// Getting here mean that nothing could be found.
+			return 0;
+			
+		} else if (range == INCURRENTSCOPEONLY) {
+			
+			do {
+				if (v->scopedepth == scopedepth &&
+					stringiseq5(nameptr, namesz, v->name) &&
+					scopeiseq(v->scope, scope, v->scopedepth))
+					return v;
+				
+			} while ((v = v->next) != linkedlist);
+			
+			// Getting here mean that nothing could be found.
+			return 0;
+			
+		} else {
+			// Will point to the lyricalvariable
+			// for the variable that is the closest.
+			lyricalvariable* foundv = 0;
+			
+			// Will hold the computed scopedepth
+			// difference for the closest variable.
+			uint scopedepthdiff = scopedepth;
+			
+			do {
+				uint diff = (scopedepth - v->scopedepth);
+				
+				if (((sint)diff >= 0) && (diff <= scopedepthdiff) &&
+					stringiseq5(nameptr, namesz, v->name) &&
+					scopeiseq(v->scope, scope, v->scopedepth)) {
+					
+					foundv = v;
+					
+					scopedepthdiff = diff;
+				}
+				
+			} while ((v = v->next) != linkedlist);
+			
+			return foundv;
+		}
+	}
+	
+	if (currentfunc == rootfunc) {
+		// I search for a global variable; there can
+		// never be a conflict with static variables having
+		// the same name, because they are prefixed.
+		if (rootfunc->vlocal) return search(nameptr, namesz, rootfunc->vlocal, scopecurrent, scope);
+		else return 0;
+		
+	} else {
+		
+		lyricalvariable* v;
+		
+		if ((currentfunc->vlocal && (v = search(nameptr, namesz, currentfunc->vlocal, scopecurrent, scope))) ||
+			(currentfunc->varg && (v = search(nameptr, namesz, currentfunc->varg, 0, (uint*)0))))
+			return v;
+		
+		// I search for a static variable which is declared
+		// within the function pointed by currentfunc.
+		// The name of those variables are prefixed
+		// with the address value (converted to
+		// a string) of the function they belong to.
+		// The prefix is surrounded with '#' and '_'.
+		if (rootfunc->vlocal) {
+			
+			string s = stringfmt("#%d_%s", (uint)currentfunc, nameptr);
+			
+			v = search(s.ptr, stringmmsz(s), rootfunc->vlocal, scopecurrent, scope);
+			
+			mmrefdown(s.ptr);
+			
+			if (v) return v;
+		}
+		
+		// I stop here if the search is limited to variables
+		// that are local to the current function.
+		if (range == INCURRENTSCOPEONLY || range == INCURRENTFUNCTIONONLY) return 0;
+		
+		// If I get here, I search for
+		// the variable in parent functions.
+		
+		lyricalfunction* f = currentfunc;
+		
+		lyricalfunction* fparent;
+		
+		while ((fparent = f->parent) != rootfunc) {
+			// When searching through parent functions,
+			// the scope tests need to be done with respect
+			// to the scope used with the parent function and
+			// not with respect to the scope used with the current
+			// function because the variables scopecurrent and scope
+			// are reset to null within funcdeclaration() before
+			// parsing the body of a new function; hence
+			// the variables scopecurrent and scope declared
+			// within parsestatement() are not used.
+			uint scopedepth = f->scopedepth;
+			uint* scope = f->scope;
+			
+			f = fparent;
+			
+			// I search within the local and
+			// argument variables of the function.
+			if ((f->vlocal && (v = search(nameptr, namesz, f->vlocal, scopedepth, scope))) ||
+				(f->varg && (v = search(nameptr, namesz, f->varg, 0, (uint*)0))))
+				return v;
+			
+			// I search for a static variable which is
+			// declared within the function pointed by f.
+			// The name of those variables are prefixed
+			// with the address value (converted to
+			// a string) of the function they belong to.
+			// The prefix is surrounded with '#' and '_'.
+			if (rootfunc->vlocal) {
+				
+				string s = stringfmt("#%d_%s", (uint)f, nameptr);
+				
+				v = search(s.ptr, stringmmsz(s), rootfunc->vlocal, scopedepth, scope);
+				
+				mmrefdown(s.ptr);
+				
+				if (v) return v;
+			}
+		}
+		
+		// I search for a global variable; there can
+		// never be a conflict with static variables having
+		// the same name, because they are prefixed.
+		if (rootfunc->vlocal) return search(nameptr, namesz, rootfunc->vlocal, 0, (uint*)0);
+		else return 0;
+	}
+}
+
+
+// Function used to search through types
+// that have been previously created.
+lyricaltype* searchtype (u8* nameptr, uint namesz, searchrange range) {
+	// This will get the number of elements in the array
+	// of nativetype that was created for native types.
+	uint nativetypecount = sizeof(nativetype)/sizeof(lyricaltype);
+	
+	// I first search through native types.
+	uint i = 0;
+	while (i < nativetypecount) {
+		
+		if (stringiseq5(nameptr, namesz, nativetype[i].name)) return &nativetype[i];
+		
+		++i;
+	}
+	
+	// Getting here mean that the type I am
+	// searching for is not a native type.
+	
+	// The type to search could be an enum;
+	// so I generate what would be the name
+	// of the enum type.
+	string enumname = stringduplicate3(nameptr, namesz);
+	stringinsert4(&enumname, '#', 0);
+	
+	lyricaltype* search (lyricaltype* linkedlist, uint scopedepth, uint* scope) {
+		
+		lyricaltype* t = linkedlist;
+		
+		if (range == INCURRENTSCOPEONLY) {
+			
+			do {
+				if (t->scopedepth == scopedepth &&
+					(stringiseq5(nameptr, namesz, t->name) || stringiseq1(enumname, t->name)) &&
+					scopeiseq(t->scope, scope, t->scopedepth))
+					return t;
+				
+			} while ((t = t->next) != linkedlist);
+			
+			// Getting here mean that nothing could be found.
+			return 0;
+			
+		} else {
+			// Will point to the lyricaltype
+			// for the type that is the closest.
+			lyricaltype* foundt = 0;
+			
+			// Will hold the computed scopedepth
+			// difference for the closest type.
+			uint scopedepthdiff = scopedepth;
+			
+			do {
+				uint diff = (scopedepth - t->scopedepth);
+				
+				if (((sint)diff >= 0) && (diff <= scopedepthdiff) &&
+					(stringiseq5(nameptr, namesz, t->name) || stringiseq1(enumname, t->name)) &&
+					scopeiseq(t->scope, scope, t->scopedepth)) {
+					
+					foundt = t;
+					
+					scopedepthdiff = diff;
+				}
+				
+			} while ((t = t->next) != linkedlist);
+			
+			return foundt;
+		}
+	}
+	
+	lyricaltype* t = currentfunc->t;
+	
+	if ((t && (t = search(t, scopecurrent, scope))) ||
+		range == INCURRENTSCOPEONLY || range == INCURRENTFUNCTIONONLY) {
+		
+		mmrefdown(enumname.ptr);
+		
+		return t;
+	}
+	
+	// If I get here I search for
+	// the type in parent functions.
+	
+	lyricalfunction* f = currentfunc;
+	
+	lyricalfunction* fparent;
+	
+	while (fparent = f->parent) {
+		
+		if (t = fparent->t) {
+			// When searching through parent functions and
+			// their siblings, the scope tests need to be done
+			// with respect to the scope used with the parent
+			// function and not with respect to the scope used
+			// with the current function because the variables
+			// scopecurrent and scope are reset to null within
+			// funcdeclaration() before parsing the body of
+			// a new function; hence the variables scopecurrent
+			// and scope declared within parsestatement()
+			// are not used.
+			uint scopedepth = f->scopedepth;
+			uint* scope = f->scope;
+			
+			if (t = search(t, scopedepth, scope)) {
+				
+				mmrefdown(enumname.ptr);
+				
+				return t;
+			}
+		}
+		
+		f = fparent;
+	}
+	
+	// Getting here mean that nothing could be found.
+	
+	mmrefdown(enumname.ptr);
+	
+	return 0;
+}
+
+
+// Structure used by searchsymbol()
+// to return the result of its search.
+typedef struct {
+	
+	enum {
+		
+		SYMBOLNOTFOUND,		// Returned if the symbol was not found.
+		SYMBOLISTYPE,		// Returned if the symbol is a type.
+		SYMBOLISVARIABLE,	// Returned if the symbol is a variable.
+		SYMBOLISFUNCTION	// Returned if the symbol is a function.
+		
+	} s;
+	
+	// Union fields used based
+	// on whatever the field s
+	// was set to.
+	union {
+		
+		lyricaltype* t;
+		lyricalvariable* v;
+		lyricalfunction* f;
+	};
+	
+} searchsymbolresult;
+
+// Function used to search through
+// symbols (type, variable or function)
+// that have been previously declared.
+searchsymbolresult searchsymbol (string name, searchrange range) {
+	// Label to jump to when done.
+	__label__ done;
+	
+	searchsymbolresult r;
+	
+	// I check whether the symbol to search is "this".
+	if (stringiseq2(name, "this")) {
+		
+		if (currentfunc == rootfunc)
+			throwerror("can only be used within a function definition");
+		else {
+			// Functions where the keyword "this" is used must be
+			// treated as function for which the address is obtained.
+			currentfunc->itspointerisobtained = 1;
+			
+			currentfunc->usethisvar = 1;
+			
+			r.s = SYMBOLISVARIABLE;
+			
+			r.v = &thisvar;
+			
+			// No jump to done because
+			// enumname do not yet
+			// need to be freed.
+			return r;
+		}
+	}
+	
+	// I check whether the symbol to search is retvar.
+	if (stringiseq2(name, "retvar")) {
+		
+		if (currentfunc == rootfunc || stringiseq2(currentfunc->type, "void"))
+			throwerror("can only be used within a function which return a value");
+		else {
+			r.s = SYMBOLISVARIABLE;
+			
+			r.v = &returnvar;
+			
+			// No jump to done because
+			// enumname do not yet
+			// need to be freed.
+			return r;
+		}
+	}
+	
+	// This get the number of elements in the array
+	// of nativetype that was created for native types.
+	uint nativetypecount = sizeof(nativetype)/sizeof(lyricaltype);
+	
+	uint i = 0;
+	
+	// I search through native types.
+	while (i < nativetypecount) {
+		
+		if (stringiseq1(name, nativetype[i].name)) {
+			
+			r.s = SYMBOLISTYPE;
+			
+			r.t = &nativetype[i];
+			
+			// No jump to done because
+			// enumname do not yet
+			// need to be freed.
+			return r;
+		}
+		
+		++i;
+	}
+	
+	// If the symbol to search is a type,
+	// it could be an enum; so I generate
+	// what would be the name of the enum type.
+	string enumname = stringduplicate1(name);
+	stringinsert4(&enumname, '#', 0);
+	
+	uint scopedepth = scopecurrent;
+	uint* savedscope = scope; // savedscope is used because GCC do not support initializing a variable using a previously declared variable having the same name.
+	uint* scope = savedscope;
+	
+	// Function which do the actual symbol search
+	// within the lyricalfunction given by
+	// the argument f, starting from lastchildof.
+	void lookforsymbol (lyricalfunction* f, lyricalfunction* lastchildof) {
+		// I search for a lyricalfunction.
+		
+		// I start by searching functions which
+		// are previously created children of f.
+		r.f = lastchildof;
+		
+		while (r.f) {
+			// I make sure that the function
+			// is in a reachable scope.
+			if (stringiseq1(name, r.f->name) &&
+				r.f->scopedepth == scopedepth &&
+				scopeiseq(r.f->scope, scope, scopedepth)) {
+				
+				r.s = SYMBOLISFUNCTION;
+				
+				goto done;
+			}
+			
+			r.f = r.f->sibling;
+		}
+		
+		// I search for a lyricalvariable.
+		
+		// Function used to search a circular linkedlist
+		// of variables taking their scope into account.
+		lyricalvariable* searchlyricalvariable (string name, lyricalvariable* linkedlist) {
+			
+			lyricalvariable* v = linkedlist;
+			
+			do {
+				if (stringiseq1(name, v->name) && v->scopedepth == scopedepth &&
+					scopeiseq(v->scope, scope, v->scopedepth)) return v;
+				
+			} while ((v = v->next) != linkedlist);
+			
+			// Getting here mean that nothing could be found.
+			return 0;
+		}
+		
+		if (f == rootfunc) {
+			// I search for a global variable; there can
+			// never be a conflict with static variables having
+			// the same name, because they are prefixed.
+			if ((r.v = rootfunc->vlocal) && (r.v = searchlyricalvariable(name, r.v))) {
+				
+				r.s = SYMBOLISVARIABLE;
+				
+				goto done;
+			}
+			
+		} else {
+			// I search within the local and argument variables of the function.
+			if (((r.v = f->vlocal) && (r.v = searchlyricalvariable(name, r.v))) ||
+				((r.v = f->varg) && (r.v = searchlyricalvariable(name, r.v)))) {
+				
+				r.s = SYMBOLISVARIABLE;
+				
+				goto done;
+			}
+			
+			// I search for a static variable which is
+			// declared within the function pointed by f.
+			// The name of those variables are prefixed
+			// with the address value (converted to a string)
+			// of the function they belong to.
+			// The prefix is surrounded with '#' and '_'.
+			if (r.v = rootfunc->vlocal) {
+				
+				string s = stringfmt("#%d_%s", (uint)f, name);
+				
+				r.v = searchlyricalvariable(s, r.v);
+				
+				mmrefdown(s.ptr);
+				
+				if (r.v) {
+					
+					r.s = SYMBOLISVARIABLE;
+					
+					goto done;
+				}
+			}
+		}
+		
+		// I search for a lyricaltype.
+		
+		// Here, r.t is set to the last type declared in the function.
+		// Remember that f->t point to the last type declared
+		// in the function and its field next point to the first type
+		// declared in the function.
+		r.t = f->t;
+		
+		if (r.t) {
+			
+			do {
+				if ((stringiseq1(name, r.t->name) || stringiseq1(enumname, r.t->name)) &&
+					r.t->scopedepth == scopedepth &&
+					scopeiseq(r.t->scope, scope, scopedepth)) {
+					
+					r.s = SYMBOLISTYPE;
+					
+					goto done;
+				}
+				
+			} while ((r.t = r.t->next) != f->t);
+		}
+	}
+	
+	// I first search locally within currentfunc.
+	
+	while (1) {
+		
+		lookforsymbol(currentfunc, lastchildofcurrentfunc);
+		
+		// If I get here, the symbol could
+		// not be found in the scope.
+		
+		if (scopedepth == scopecurrent && range == INCURRENTSCOPEONLY) {
+			
+			r.s = SYMBOLNOTFOUND;
+			
+			r.v = 0;
+			
+			goto done;
+			
+		} else if (scopedepth) --scopedepth; // I try searching in the parent scope.
+		else break;
+	}
+	
+	if (range == INCURRENTFUNCTIONONLY) {
+		
+		r.s = SYMBOLNOTFOUND;
+		
+		r.v = 0;
+		
+		goto done;
+	}
+	
+	// If I get here, I couldn't find the symbol locally within currentfunc;
+	// next I search through parent functions and their siblings.
+	
+	lyricalfunction* f = currentfunc;
+	
+	while (f != rootfunc) {
+		// When searching through parent functions and
+		// their siblings, the scope tests need to be done
+		// with respect to the scope used with the parent
+		// function and not with respect to the scope used
+		// with the current function because the variables
+		// scopecurrent and scope are reset to null within
+		// funcdeclaration() before parsing the body of
+		// a new function; hence the variables scopecurrent
+		// and scope declared within parsestatement()
+		// are not used.
+		scopedepth = f->scopedepth;
+		scope = f->scope;
+		
+		lyricalfunction* fparent = f->parent;
+		
+		while (1) {
+			
+			lookforsymbol(fparent, f);
+			
+			// If I get here, the symbol could
+			// not be found in the scope.
+			
+			if (scopedepth) --scopedepth; // I try searching in the parent scope.
+			else break;
+		}
+		
+		f = fparent;
+	}
+	
+	// Getting here mean that nothing could be found.
+	
+	r.s = SYMBOLNOTFOUND;
+	
+	r.v = 0;
+	
+	done:
+	
+	mmrefdown(enumname.ptr);
+	
+	return r;
+}
+
+
+// Return a value which determine in which
+// nth parent of the current function the
+// lyricalfunction given as argument is in.
+// Hence a lyricalfunction found
+// in the currentfunc will return 0;
+// An lyricalfunction found in the immediate
+// parent of currentfunc will return 1; and so on.
+// The lyricalfunction pointed by f should be
+// a valid previously declared lyricalfunction
+// otherwise the lyricalfunction will not be found
+// and the function will return without returning
+// a value and an undefined behaviour will occur.
+uint funcfunclevel (lyricalfunction* f) {
+	// This function search a linkedlist of lyricalfunction siblings.
+	uint search (lyricalfunction* linkedlist) {
+		
+		lyricalfunction* func = linkedlist;
+		
+		do {
+			if (func == f) return 1;
+			
+		} while (func = func->sibling);
+		
+		// I get here if I couldn't find anything.
+		return 0;
+	}
+	
+	// I first search within the current function.
+	
+	if (lastchildofcurrentfunc && search(lastchildofcurrentfunc)) return 0;
+	
+	// If I get here, I search for the lyricalfunction in parent functions.
+	
+	lyricalfunction* ff = currentfunc;
+	uint funclevel = 0;
+	
+	do {
+		// There is no need to check
+		// whether (funclevel == (uint)-1),
+		// because it would never happen,
+		// since funclevel is a uint and
+		// (uint)-1 is the total size
+		// of the virtual memory.
+		// Hence the entire virtual memory would get
+		// filled up before funclevel get overflowed.
+		++funclevel;
+		
+		if (search(ff)) return funclevel;
+		
+	} while (ff = ff->parent);
+	
+	// Getting here mean that I couldn't find
+	// the lyricalfunction. No value is returned
+	// and will cause an undefined result if f
+	// was a lyricalfunction not previously declared.
+	// So this function should always be used
+	// with a valid and reacheable lyricalfunction.
+}
+
+
+// Return a value which determine in which
+// nth parent of the current function
+// the variable given as argument is in.
+// Hence a variable found in the currentfunc
+// will return 0; a variable found in
+// the immediate parent of currentfunc
+// will return 1; and so on.
+// The variable pointed by v should be
+// a valid previously declared variable
+// otherwise the variable will not be found
+// and the function will return without
+// returning a value and an undefined behaviour
+// will occur. Furthemore, this function
+// should not be used with global variable
+// because it will would mean that global variables
+// are in the stack, which is wrong; global variables
+// reside in the global variable region.
+uint varfunclevel (lyricalvariable* v) {
+	
+	if (v->funcowner == rootfunc) throwerror(stringfmt("internal error: %s: unexpected variable", __FUNCTION__).ptr);
+	
+	// This function search a circular linkedlist of variables.
+	uint search (lyricalvariable* linkedlist) {
+		
+		lyricalvariable* var = linkedlist;
+		
+		do {
+			if (var == v) return 1;
+			
+		} while ((var = var->next) != linkedlist);
+		
+		// I get here if I couldn't find anything.
+		return 0;
+	}
+	
+	// I first search within the current function.
+	
+	if ((currentfunc->vlocal && search(currentfunc->vlocal)) ||
+		(currentfunc->varg && search(currentfunc->varg))) return 0;
+	
+	// If I get here, I search for the variable in parent functions.
+	
+	lyricalfunction* f = currentfunc;
+	
+	uint funclevel = 0;
+	
+	while (f = f->parent) {
+		// There is no need to check
+		// whether (funclevel == (uint)-1),
+		// because it would never happen,
+		// since funclevel is a uint and
+		// (uint)-1 is the total size
+		// of the virtual memory.
+		// Hence the entire virtual memory would get
+		// filled up before funclevel get overflowed.
+		++funclevel;
+		
+		if ((f->vlocal && search(f->vlocal)) || (f->varg && search(f->varg)))
+			return funclevel;
+	}
+	
+	// Getting here mean that I couldn't find
+	// the lyricalvariable. No value is returned
+	// and will cause an undefined result if v
+	// was a lyricalvariable not previously declared.
+	// So this function should always be used
+	// with a valid and reacheable lyricalvariable.
+}
+
+
+// This function will compute the size
+// that a type will occupy in memory
+// taking in account pointers and arrays.
+// ei: sizeof(uint*[3][5]) == 5*3*sizeof(uint*) == 60;
+// assuming that the size of a pointer is 4 bytes.
+uint sizeoftype (u8* typeptr, uint typesz) {
+	
+	u8* s = (typeptr + typesz) -1;
+	
+	u8 c = *s;
+	
+	// The type of a pointer is sizeofgpr;
+	if (c == '*' || c == ')') return sizeofgpr;
+	
+	if (c == ']') {
+		// I find where the opening bracket is.
+		do --s; while (*s != '[');
+		
+		// I read the decimal value within the brackets.
+		uint size = stringconverttoint1(s+1);
+		
+		// I recursively keep parsing the type string.
+		return size * sizeoftype(typeptr, (uint)s - (uint)typeptr);
+	}
+	
+	// If I get here, the string type must contain
+	// the name of a previously defined type.
+	return searchtype(typeptr, typesz, INCURRENTANDPARENTFUNCTIONS)->size;
+}
+
+
+// Function no longer needed
+// because two types are compatible
+// only if they exactely match.
+#if 0
+// This function check the compatibility of the type string
+// pointed by the argument secondary against the type string
+// pointed by the argument primary.
+// ei: All native types are compatible between each other.
+// "void*" is compatible with any pointer type such as "uint*" or "uint(u8)";
+// "uint(void*)" is compatible only with another "uint(void*)", and the "void*" type used within
+// the paranthesis of the pointer to function type specification has no effect.
+// The entire string passed through the argument secondary is used, while for
+// the argument primary I use the entire string or I use only the portion that is terminated by
+// a paranthesis, comma or ampersand in a situation where a portion of a larger type string was passed
+// as primary argument as it is the case in parsetypeofptrtofunc().
+// The location of the terminating null character or comma character in the primary string argument
+// is returned; this function throws an error and never return if a type incompatibility is found.
+u8* checktypecompatibility (u8* primary, string secondary, u8* errormsg) {
+	// This function should never fail because
+	// it goes through a type string that is
+	// supposed to have been correctly parsed.
+	// This function will return the byte address
+	// after the last character of the type.
+	u8* findendoftype (u8* c) {
+		
+		uint openingparanthesisfound = 0;
+		
+		while (1) {
+			
+			if (*c == ')') {
+				
+				if (openingparanthesisfound) --openingparanthesisfound;
+				else return c;
+				
+			} else if (*c == '(') ++openingparanthesisfound;
+			else if (*c == ',' || *c == '&') {
+				
+				if (!openingparanthesisfound) return c;
+				
+			} else if (!*c) return c;
+			
+			++c;
+		}
+	}
+	
+	// From the primary argument type string,
+	// I extract the portion of the string that is
+	// the type string to use to check compatibilty.
+	uint sz = (uint)findendoftype(primary) - (uint)primary;
+	
+	if (stringiseq5 (primary, sz, voidptrstr)) {
+		// If the primary type string is "void*",
+		// the secondary type string must be
+		// any type of pointer.
+		if (secondary.ptr[stringmmsz(secondary)-1] != '*' && secondary.ptr[stringmmsz(secondary)-1] != ')')
+			throwerror(errormsg);
+		
+	} else if (pamsynmatch2(isnativetype, primary, sz).start) {
+		// If the primary type string is a native type,
+		// the secondary type string must be a native type.
+		if (!pamsynmatch2(isnativetype, secondary.ptr, stringmmsz(secondary)).start)
+			throwerror(errormsg);
+		
+	// If the primary type string is neither "void*"
+	// nor a native type string, it must match exactely
+	// the secondary type string, otherwise an error is thrown.
+	} else if (!stringiseq5(primary, sz, secondary))
+		throwerror(errormsg);
+	
+	return primary + sz;
+}
+#endif
+
+
+// This function is used to sign or zero
+// extend a number if it has a native type.
+u64 ifnativetypedosignorzeroextend (u64 value, u8* typeptr, uint typesz) {
+	
+	if (pamsynmatch2(isnativetype, typeptr, typesz).start) {
+		
+		if (*typeptr == 's') {
+			
+			u64 msbzeros = countofmsbzeros(sizetoboundary(sizeoftype(typeptr, typesz)));
+			
+			if (msbzeros) {
+				value <<= msbzeros;
+				value = ((sint)value >> msbzeros);
+			}
+			
+		} else {
+			// I apply the correct boundary to ensure
+			// that the immediate value contain
+			// a value within the correct boundaries.
+			value &= sizetoboundary(sizeoftype(typeptr, typesz));
+		}
+	}
+	
+	return value;
+}
+
+
+// This function is used to search
+// a member variable of a type.
+// This function should not be called with
+// its argument name set to an empty
+// null terminated string.
+lyricalvariable* searchtypemember (lyricaltype* t, string name) {
+	// This function implement the search,
+	// doing recursions when needed.
+	lyricalvariable* search (lyricaltype* t) {
+		// The check on t->v is necessary because
+		// searchtypemember() can be called on
+		// a lyricaltype being defined and for which
+		// at least one member lyricalvariable has not
+		// yet been created; or searchtypemember()
+		// can be called on the native type of
+		// a lyricalvariable member used to hold
+		// the offset for the next variable member.
+		if (t->v) {
+			
+			lyricalvariable* v = t->v;
+			
+			// I need to remember that the field v of a lyricaltype
+			// point to its last created variable member.
+			do {
+				// Here I check whether the lyricalvariable member
+				// was created for an anonymous struct/pstruct/union.
+				// The name of a lyricalvariable member created for
+				// an anonymous struct/pstruct/union is an empty
+				// null terminated string.
+				// If the lyricalvariable member was created for
+				// an nonymous struct/pstruct/union, I recursively call
+				// search() to look among the variable members of
+				// the anonymous struct/pstruct/union, otherwise
+				// I can compare the names.
+				if (v->name.ptr[0]) {
+					
+					if (stringiseq1(name, v->name)) return v;
+					
+				} else {
+					
+					string vtype = v->type;
+					
+					lyricalvariable* vv = search(searchtype(vtype.ptr, stringmmsz(vtype), INCURRENTANDPARENTFUNCTIONS));
+					
+					if (vv) return vv;
+				}
+				
+			} while ((v = v->next) != t->v);
+		}
+		
+		return 0;
+	}
+	
+	// If the lyricaltype pointed by t in which
+	// I am looking for a member is an anonymous type,
+	// I start the search from its owner lyricaltype,
+	// otherwise I do the search from the lyricaltype
+	// pointed by t itself.
+	if (t->ownerofanonymoustype) return search(t->ownerofanonymoustype);
+	else return search(t);
+}
+
+
+// This function search among all labels of currentfunc, using the arguments
+// name, position from which the label is searched, and scope information.
+// If the label is found, the address of its associated LYRICALOPNOP is returned.
+// This function is used only in the secondpass
+// because labels are created only in the secondpass.
+// The argument frompos (which is the position from which the label
+// is searched), is not used when the argument range == INCURRENTSCOPEONLY.
+// Only INCURRENTSCOPEONLY and INCURRENTFUNCTIONONLY
+// for the argument range are supported.
+lyricalinstruction* searchlabel (string name, u8* frompos, uint scopedepth, uint* scope, searchrange range) {
+	
+	if (!currentfunc->l) return 0;
+	
+	// Here l is initialized to the last label declared in currentfunc.
+	// Remember that currentfunc->l point to the last label declared in currentfunc
+	// and its field next point to the first label declared in currentfunc.
+	lyricallabel* l = currentfunc->l;
+	
+	while (1) {
+		// Within this loop I search strictly within
+		// the scope for the depth set in scopedepth.
+		do {
+			if (stringiseq1(name, l->name) &&
+				l->scopedepth == scopedepth &&
+				scopeiseq(l->scope, scope, scopedepth)) {
+				
+				return l->i;
+			}
+			
+		} while ((l = l->next) != currentfunc->l);
+		
+		if (range == INCURRENTSCOPEONLY) return 0;
+		
+		// Will point to the lyricalinstruction for
+		// the label that was last found the closest.
+		lyricalinstruction* i = 0;
+		
+		// Will hold the computed line-distance
+		// for the closest label found.
+		uint dis = -1;
+		
+		// Within this loop I search within sub-scopes
+		// of the scope for the depth set in scopedepth.
+		// Hence there can be more than one label with
+		// the same name, and if any the closest is returned.
+		do {
+			u8* lpos;
+			
+			u8* start;
+			u8* end;
+			
+			uint d;
+			
+			u8 c = l->name.ptr[0];
+			
+			// Only declared labels can be found
+			// to have the same name within a function;
+			// labels named using newgenericlabelid()
+			// are always unique.
+			// Hence the line-distance computation
+			// need to be done only for declared labels.
+			// Declared labels are lowercase and
+			// cannot start by a numeric character.
+			if (c >= 'a' && c <= 'z') {
+				
+				lpos = l->pos;
+				
+				if (frompos < lpos) {
+					
+					start = frompos;
+					
+					end = lpos;
+					
+				} else {
+					
+					start = lpos;
+					
+					end = frompos;
+				}
+				
+				d = 0;
+				
+				// I compute the number of lines
+				// between start and end.
+				do d += (*start == '\n');
+				while (d < dis && ++start < end);
+				
+			} else d = 0;
+			
+			if ((d < dis) && stringiseq1(name, l->name) &&
+				l->scopedepth > scopedepth &&
+				scopeiseq(l->scope, scope, scopedepth)) {
+				
+				i = l->i;
+				
+				dis = d;
+			}
+			
+		} while ((l = l->next) != currentfunc->l);
+		
+		if (i) return i;
+		
+		if (scopedepth) --scopedepth;
+		else return 0;
+	}
+}
+
+
+// Here I declare scopesnapshotforlabeledinstructiontoresolve()
+// because it is needed by resolvelabellater().
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto void scopesnapshotforlabeledinstructiontoresolve (lyricallabeledinstructiontoresolve*);
+
+// The argument name has to be a non-null
+// and valid string; a duplicate of that string
+// is used to set the field name of the created
+// struct lyricallabeledinstructiontoresolve.
+// This function is used only in the secondpass
+// because labels are created only in the secondpass.
+void resolvelabellater (string name, lyricalinstruction** i) {
+	// I allocate memory for a new lyricallabeledinstructiontoresolve structure.
+	lyricallabeledinstructiontoresolve* litr = mmalloc(sizeof(lyricallabeledinstructiontoresolve));
+	
+	litr->name = stringduplicate1(name);
+	
+	litr->i = i;
+	
+	litr->pos = curpos;
+	
+	if (linkedlistoflabeledinstructiontoresolve) {
+		
+		litr->next = linkedlistoflabeledinstructiontoresolve->next;
+		
+		linkedlistoflabeledinstructiontoresolve->next = litr;
+		
+	} else litr->next = litr;
+	
+	linkedlistoflabeledinstructiontoresolve = litr;
+	
+	scopesnapshotforlabeledinstructiontoresolve(litr);
+}
+
+
+// Declare flushreg() here, as it is needed
+// within "opcodes.tools.parsestatement.lyrical.c".
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto void flushreg (lyricalreg* r);
+
+#include "opcodes.tools.parsestatement.lyrical.c"
+
+// This function resolve all lyricallabeledinstructiontoresolve
+// created by resolvelabellater().
+// This function is the one destroying the linkedlist
+// pointed by linkedlistoflabeledinstructiontoresolve
+// and will set it back to null after all
+// lyricallabeledinstructiontoresolve have been resolved.
+// This function will also free all the lyricallabel
+// of currentfunc because they will no longer be needed,
+// since this function is called at the end of the parsing of a function.
+// This function is used only in the secondpass
+// because labels are created only in the secondpass.
+void resolvelabelsnow () {
+	
+	if (linkedlistoflabeledinstructiontoresolve) {
+		
+		lyricallabeledinstructiontoresolve* litr = linkedlistoflabeledinstructiontoresolve;
+		
+		do {
+			// Here I search the label in order to
+			// obtain an associated lyricalinstruction.
+			// If the label could not be found,
+			// an error is returned.
+			if (!(*litr->i = searchlabel(litr->name, litr->pos, litr->scopedepth, litr->scope, INCURRENTFUNCTIONONLY))) {
+				
+				string s = stringduplicate2("label \"");
+				
+				stringappend1(&s, litr->name);
+				
+				if (currentfunc == rootfunc) {
+					// I set curpos to null so that throwerror()
+					// do not use its value.
+					curpos = 0;
+					stringappend2(&s, "\" not found within the root function");
+					
+				} else {
+					curpos = currentfunc->startofdeclaration;
+					stringappend2(&s, "\" not found within function definition");
+				}
+				
+				// The string pointed by s.ptr will be freed using
+				// mmsessionfree() upon returning to lyricalcompile();
+				throwerror(s.ptr);
+			}
+			
+			mmrefdown(litr->name.ptr);
+			
+			if (litr->scope) mmrefdown(litr->scope);
+			
+			lyricallabeledinstructiontoresolve* savedlitr = litr;
+			litr = litr->next;
+			mmrefdown(savedlitr);
+			
+		// When litr == linkedlistoflabeledinstructiontoresolve
+		// it mean that I went through all
+		// the elements of the circular linkedlist.
+		} while (litr != linkedlistoflabeledinstructiontoresolve);
+		
+		linkedlistoflabeledinstructiontoresolve = 0;
+	}
+	
+	// Now I free all the lyricallabel of currentfunc if any.
+	if (currentfunc->l) {
+		
+		lyricallabel* l = currentfunc->l;
+		
+		do {
+			mmrefdown(l->name.ptr);
+			
+			if (l->scope) mmrefdown(l->scope);
+			
+			lyricallabel* savedl = l;
+			l = l->next;
+			mmrefdown(savedl);
+			
+		} while (l != currentfunc->l);
+		
+		// There is no need to set currentfunc->l to null.
+	}
+}
+
+
+// Here I declare scopesnapshotforlabel()
+// because it is needed by newlabel().
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto void scopesnapshotforlabel (lyricallabel*);
+
+// This function create a new lyricallabel in currentfunc.
+// The string name passed as argument is set
+// in the field name of the label created without duplication.
+// This function is never to be called with
+// a null string; ei: name.ptr == 0;
+// This function is used only in the secondpass because
+// lyricallabel are created only in the secondpass.
+void newlabel (string name) {
+	// Check if the name conflict with a keyword.
+	if (pamsynmatch2(iskeyword, name.ptr, stringmmsz(name)).start)
+		throwerror("a label name cannot be the same as a keyword");
+	
+	// Note that labels and catchable-labels
+	// can have the same name within the same
+	// function since a catchable-label need
+	// to have its associated label created
+	// within the same function.
+	// Note also that a label can have
+	// the same name as a variable, function
+	// or type without conflicts, in fact
+	// only type, variable and function cannot
+	// have the same name within the same scope.
+	
+	// Check if a label with the same name was not
+	// already declared within the current scope.
+	if (searchlabel(name, (u8*)0, scopecurrent, scope, INCURRENTSCOPEONLY))
+		throwerror("label was already declared within this scope");
+	
+	// Allocate memory for a new label structure.
+	lyricallabel* l = mmallocz(sizeof(lyricallabel));
+	
+	// Set the field next of the last created label
+	// to the first created label in the function.
+	if (currentfunc->l) {
+		
+		l->next = currentfunc->l->next;
+		currentfunc->l->next = l;
+		
+	} else l->next = l;
+	
+	// Set currentfunc->l to the label structure
+	// that I just allocated since
+	// it is the last created label in the function.
+	currentfunc->l = l;
+	
+	l->name = name;
+	
+	// Create a LYRICALOPNOP for the label.
+	l->i = newinstruction(currentfunc, LYRICALOPNOP);
+	
+	l->pos = curpos;
+	
+	scopesnapshotforlabel(l);
+}
+
+
+// This function search a circular linkedlist of catchable-label
+// using the name and scope information given as arguments.
+// This function is used only in the secondpass because
+// catchable-labels are created only in the secondpass.
+// Only INCURRENTSCOPEONLY and INCURRENTFUNCTIONONLY
+// for the argument range are supported.
+lyricalcatchablelabel* searchcatchablelabellinkedlist (string name, lyricalcatchablelabel* linkedlist, uint scopedepth, uint* scope, searchrange range) {
+	
+	if (!linkedlist) return 0;
+	
+	lyricalcatchablelabel* cl = linkedlist;
+	
+	if (range == INCURRENTSCOPEONLY) {
+		
+		do {
+			if (cl->scopedepth == scopedepth &&
+				stringiseq1(name, cl->name) &&
+				scopeiseq(cl->scope, scope, scopedepth))
+				return cl;
+			
+		} while ((cl = cl->next) != linkedlist);
+		
+		// Getting here mean that nothing could be found.
+		return 0;
+		
+	} else {
+		// Will point to the lyricalcatchablelabel
+		// for the catchable-label that is the closest.
+		lyricalcatchablelabel* foundcl = 0;
+		
+		// Will hold the computed scopedepth
+		// difference for the closest catchable-label.
+		uint scopedepthdiff = scopedepth;
+		
+		do {
+			uint diff = (scopedepth - cl->scopedepth);
+			
+			if (((sint)diff >= 0) && (diff <= scopedepthdiff) &&
+				stringiseq1(name, cl->name) &&
+				scopeiseq(cl->scope, scope, cl->scopedepth)) {
+				
+				foundcl = cl;
+				
+				scopedepthdiff = diff;
+			}
+			
+		} while ((cl = cl->next) != linkedlist);
+		
+		return foundcl;
+	}
+}
+
+
+// Here I declare scopesnapshotforcatchablelabel()
+// because it is needed by newcatchablelabel().
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto void scopesnapshotforcatchablelabel (lyricalcatchablelabel*);
+
+// This function create a new lyricalcatchablelabel.
+// The string name passed as argument is set in the field name
+// of the lyricalcatchablelabel created without duplication.
+// This function is never to be called with a null string; ei: name.ptr == 0.
+// This function is used only in the secondpass because
+// catchable-labels are created only in the secondpass.
+void newcatchablelabel (string name) {
+	// Here I check if the name conflict with a keyword.
+	if (pamsynmatch2(iskeyword, name.ptr, stringmmsz(name)).start)
+		throwerror("a catchable-label name cannot be the same as a keyword");
+	
+	// Note that labels and catchable-labels can have
+	// the same name within the same function since
+	// a catchable-label need to have its associated
+	// label created within the same function.
+	// Note also that a catchable-label name can have
+	// the same name as a variable, function or type
+	// without conflicts; in fact, only type, variable and
+	// function cannot have the same name within the same scope.
+	
+	// Here I check if a catchable-label with the same name
+	// was not already declared within the current scope.
+	if (searchcatchablelabellinkedlist(name, currentfunc->cl, scopecurrent, scope, INCURRENTSCOPEONLY))
+		throwerror("catchable-label was already declared within this scope");
+	
+	// I allocate memory for a new lyricalcatchablelabel.
+	lyricalcatchablelabel* cl = mmallocz(sizeof(lyricalcatchablelabel));
+	
+	// I set the field next of the last
+	// created lyricalcatchablelabel to the first
+	// created lyricalcatchablelabel in the function.
+	if (currentfunc->cl) {
+		
+		cl->next = currentfunc->cl->next;
+		currentfunc->cl->next = cl;
+		
+	} else cl->next = cl;
+	
+	// Set currentfunc->cl to the lyricalcatchablelabel
+	// that I just allocated since it is the last
+	// created lyricalcatchablelabel in the function.
+	currentfunc->cl = cl;
+	
+	cl->name = name;
+	
+	scopesnapshotforcatchablelabel(cl);
+}
+
+
+// This function add the instruction given as argument
+// to the linkedlist of lyricalcatchablelabelledinstructiontoresolve
+// of the lyricalcatchablelabel given as argument.
+// This function is used only in the secondpass because
+// catchable-labels are created only in the secondpass.
+void resolvecatchablelabellater (lyricalcatchablelabel* cl, lyricalinstruction** i) {
+	// I allocate memory for a new lyricalcatchablelabelledinstructiontoresolve.
+	lyricalcatchablelabelledinstructiontoresolve* cltr = mmalloc(sizeof(lyricalcatchablelabelledinstructiontoresolve));
+	
+	cltr->i = i;
+	
+	if (cl->linkedlist) {
+		
+		cltr->next = cl->linkedlist->next;
+		cl->linkedlist->next = cltr;
+		
+	} else cltr->next = cltr;
+	
+	cl->linkedlist = cltr;
+}
+
+
+// This function resolve all the lyricalcatchablelabelledinstructiontoresolve
+// of all the lyricalcatchablelabel of the current function
+// which were buffered with resolvecatchablelabellater().
+// This function should only be called when currentfunc->cl
+// is non-null because there is no check on whether it is valid.
+// This function is the one destroying the linkedlist
+// pointed by the field linkedlist of the struct lyricalcatchablelabel,
+// and all the lyricalcatchablelabel of the current function.
+// This function is used only in the secondpass because
+// lyricalcatchablelabel are created only in the secondpass.
+void resolvecatchablelabelsnow () {
+	
+	lyricalcatchablelabel* cl = currentfunc->cl;
+	
+	do {
+		lyricalinstruction* i;
+		
+		// Here I search within the scope where the catchable-label,
+		// currently being processed, was declared, for the label having
+		// the same name in order to obtain the associated lyricalinstruction.
+		// If the label could not be found, I throw an error.
+		if (!(i = searchlabel(cl->name, (u8*)0, cl->scopedepth, cl->scope, INCURRENTSCOPEONLY))) {
+			
+			string s = stringduplicate2("label \"");
+			
+			stringappend1(&s, cl->name);
+			
+			if (currentfunc == rootfunc) {
+				// I set curpos to null so that throwerror()
+				// do not use its value.
+				curpos = 0;
+				stringappend2(&s, "\" not found within the root function");
+				
+			} else {
+				curpos = currentfunc->startofdeclaration;
+				stringappend2(&s, "\" not found within function definition");
+			}
+			
+			// The string pointed by s.ptr will be freed using
+			// mmsessionfree() upon returning to lyricalcompile();
+			throwerror(s.ptr);
+		}
+		
+		lyricalcatchablelabelledinstructiontoresolve* cltr = cl->linkedlist;
+		
+		if (cltr) {
+			// Here each lyricalcatchablelabelledinstructiontoresolve is resolved
+			// to the lyricalinstruction associated with the lyricalcatchablelabel.
+			do {
+				*cltr->i = i;
+				
+				lyricalcatchablelabelledinstructiontoresolve* savedcltr = cltr;
+				cltr = cltr->next;
+				mmrefdown(savedcltr);
+				
+			// When cltr == cl->linkedlist it mean that I went through all the elements of
+			// the circular linkedlist.
+			} while (cltr != cl->linkedlist);
+		}
+		
+		mmrefdown(cl->name.ptr);
+		
+		if (cl->scope) mmrefdown(cl->scope);
+		
+		lyricalcatchablelabel* savedcl = cl;
+		cl = cl->next;
+		mmrefdown(savedcl);
+		
+	} while (cl != currentfunc->cl);
+	
+	// There is no need to set the field currentfunc->cl to null.
+}
+
+
+// Enum type used with varalloc().
+typedef enum {
+	// As lyricalvariable get allocated
+	// and freed in a lyricalfunction,
+	// holes occur between memory space
+	// represented by lyricalvariable.
+	// Re-using those holes reduce
+	// the maximum stack space needed
+	// by a lyricalfunction.
+	// When allocating a lyricalvariable
+	// for a status/static variable,
+	// holes cannot be re-used otherwise
+	// its value, which is supposed to be
+	// preserved for the entire duration
+	// of the program, get lost if its memory
+	// space was used before it was allocated
+	// to use that same memory space.
+	
+	LOOKFORAHOLE, // Look for a hole.
+	DONOTLOOKFORAHOLE // Do not look for a hole.
+	
+} varallocflag;
+
+// This function allocate a new variable
+// either in the linkedlist pointed by currenttype->v
+// or currentfunc->varg or currentfunc->vlocal
+// depending on whether I am respectively defining
+// a struct/pstruct/union or declaring the arguments
+// of a function or declaring a local variable.
+// All the fields of the newly allocated lyricalvariable
+// that are not set by this function will be null.
+// An allocation size of 0 is used to create variables
+// which do not take up any memory in the stack or
+// global variable region; no alignement is necessary
+// for those type of variable; their offset field is
+// simply used to compute and hold the offset for
+// the next variable to create in the same linkedlist.
+// The argument size is only to be either 0 or
+// a powerof2; it is necessary to follow that rule
+// because the size is used for alignment.
+lyricalvariable* varalloc (uint size, varallocflag flag) {
+	// I allocate the new lyricalvariable.
+	lyricalvariable* v1 = mmallocz(sizeof(lyricalvariable));
+	
+	if (!currenttype) {
+		// If I am not creating a member variable of
+		// a struct/pstruct/union I set the field alwaysvolatile.
+		// I initialize the field alwaysvolatile with
+		// the address of its field isalwaysvolatile.
+		v1->alwaysvolatile = &v1->isalwaysvolatile;
+		
+		// When compileargcompileflag&LYRICALCOMPILEALLVARVOLATILE
+		// is true, all variables are made volatile,
+		// hence their value are never cached in registers.
+		// This is useful when debugging because it is easier
+		// for a debugger to just read memory in order
+		// to retrieve the value of a variable instead of
+		// having to write code in order to keep track of
+		// register utilization per variable
+		// for each instruction.
+		if (compileargcompileflag&LYRICALCOMPILEALLVARVOLATILE) *v1->alwaysvolatile = 1;
+		else *v1->alwaysvolatile = 0;
+	}
+	
+	v1->size = size;
+	
+	lyricalvariable* v2;
+	
+	if (flag == LOOKFORAHOLE && size && statementparsingflag != PARSEFUNCTIONARG &&
+		statementparsingflag != PARSESTRUCT && statementparsingflag != PARSEPSTRUCT &&
+		statementparsingflag != PARSEUNION) {
+		// I get here if I am allocating a variable
+		// with a non-null size and if I am creating
+		// the variable in the linkedlist pointed
+		// by the field vlocal of the function
+		// pointed by currentfunc;
+		// 
+		// Here I try to allocate a new variable
+		// before the last variable without increasing
+		// the value of currentfunc->vlocalmaxsize.
+		// The algorithm essentially try to find un-used space.
+		
+		if (currentfunc->vlocal) {
+			// I set v2 to the first variable of the linkedlist.
+			// Remember that currentfunc->vlocal point to
+			// the last created variable of the linkedlist.
+			v2 = currentfunc->vlocal->next;
+			
+			// Set v2 to the next non-null size variable.
+			while (!v2->size && v2 != currentfunc->vlocal) v2 = v2->next;
+			
+			if (size <= v2->offset) {
+				// If I get here, I found un-used
+				// space before the first variable
+				// with a non-null size.
+				
+				// I insert the newly created variable
+				// in the circular linkedlist.
+				v1->prev = v2->prev;
+				v1->next = v2;
+				v2->prev->next = v1;
+				v2->prev = v1;
+				
+				// Note that v1->offset will be null.
+				
+				v1->funcowner = currentfunc;
+				v1->argorlocal = &currentfunc->vlocal;
+				
+				return v1;
+			}
+			
+			uint offset;
+			
+			while (v2 != currentfunc->vlocal) {
+				// Within this loop I look for space between
+				// variables having a non-null size; variable
+				// having a non-null size occupy stack or global
+				// variable memory and have offset values which
+				// can be relied-on. The offset value of variables
+				// having a null size is always null and never
+				// relied-on because they do not occupy stack
+				// or global variable memory.
+				
+				lyricalvariable* v3 = v2->next;
+				
+				// Set v3 to the next non-null size variable.
+				while (!v3->size && v3 != currentfunc->vlocal) v3 = v3->next;
+				
+				// Note that the next variable pointed by v3
+				// could end up being a variable with a null size
+				// but when that is the case, it is always
+				// the last variable of the linkedlist and I am safe
+				// because that will certainly be the offset of
+				// the next variable to create having a non-null size.
+				// 
+				// Here I set offset after the variable pointed by v2,
+				// align the offset, and see if creating a variable
+				// at that offset will not overlap the next variable
+				// pointed by v3.
+				// 
+				// For safety, local and global variables
+				// are all aligned to sizeofgpr; in fact, when
+				// processing a pushed argument for an input-output
+				// argument of an assembly instruction or an operator
+				// such as ++, register reassignment can be done,
+				// and there is a possibility that the value set
+				// in the fields offset and size of the register
+				// could be wrong to where the register represent
+				// a location beyond the boundary of the variable;
+				// and that can only occur if the programmer
+				// confused the compiler by using an incorrect
+				// casting type.
+				
+				offset = v2->offset + v2->size;
+				
+				offset = (((offset-1) & (-sizeofgpr)) + sizeofgpr);
+				
+				if ((offset+size) <= v3->offset) {
+					// If I get here, I have found un-used space.
+					
+					v1->offset = offset;
+					
+					// I insert the newly created variable
+					// in the circular linkedlist.
+					// Note that here I am careful to use v2->next
+					// instead of v3, because v3 is not necessarly
+					// the variable following the variable pointed
+					// by v2 if I had skipped variables having
+					// their field size null.
+					v1->prev = v2;
+					v1->next = v2->next;
+					v2->next->prev = v1;
+					v2->next = v1;
+					
+					v1->funcowner = currentfunc;
+					v1->argorlocal = &currentfunc->vlocal;
+					
+					return v1;
+				}
+				
+				// I set v2 to v3 in order to search
+				// from the previous end limit; v3 will
+				// be set with another end limit and
+				// I will search again for un-used space
+				// between those limits.
+				v2 = v3;
+				
+				// When I get here, if (v2 == currentfunc->vlocal)
+				// then I reached the last variable, and it mean that
+				// I could not find any useable space within
+				// the first and last variable of the linkedlist.
+			}
+			
+			// When I get here, v2 == currentfunc->vlocal.
+			
+			// Find the last variable
+			// of the linkedlist with
+			// a non-null size, so that
+			// the offset of the newly
+			// created variable be computed
+			// from a variable which
+			// occupy space in the stack
+			// or global variable memory.
+			while (!v2->size && (v2 = v2->prev) != currentfunc->vlocal);
+			
+			// Here I set offset after the variable pointed by v2
+			// (which is the last variable) align the offset, and see
+			// if creating a variable at that offset still fit within
+			// the hole after that last variable.
+			// 
+			// As previously commented, local and global
+			// variables are all aligned to sizeofgpr.
+			
+			offset = v2->offset + v2->size;
+			
+			offset = (((offset-1) & (-sizeofgpr)) + sizeofgpr);
+			
+			if ((offset + size) <= currentfunc->vlocalmaxsize) {
+				// If I get here, I found un-used
+				// space after the last variable
+				// with a non-null size.
+				
+				v1->offset = offset;
+				
+				v1->prev = v2;
+				v1->next = v2->next;
+				v2->next->prev = v1;
+				v2->next = v1;
+				
+				// If v2 still point to the last variable of
+				// its linkedlist, I update its value to v1.
+				if (v2 == currentfunc->vlocal) currentfunc->vlocal = v1;
+				
+				v1->funcowner = currentfunc;
+				v1->argorlocal = &currentfunc->vlocal;
+				
+				return v1;
+			}
+		}
+	}
+	
+	// If I get here, the newly created variable
+	// is put in the appropriate linkedlist.
+	
+	// Variable used to determine whether
+	// v2 was set to currentfunc->vlocal.
+	uint iscurrentfuncvlocal = 0;
+	
+	// I set v2 to the last variable
+	// of the appropriate linkedlist.
+	if (statementparsingflag == PARSEFUNCTIONARG) v2 = currentfunc->varg;
+	else if (currenttype) v2 = currenttype->v;
+	else {
+		v2 = currentfunc->vlocal;
+		
+		iscurrentfuncvlocal = 1;
+	}
+	
+	if (v2) {
+		// Remember that v2->next point to
+		// the first variable of the linkedlist,
+		// and I want the field next of the newly
+		// created variable to point to that first
+		// variable of the linkedlist.
+		v1->next = v2->next;
+		v2->next = v1;
+		
+		// Find the last variable
+		// of the linkedlist with
+		// a non-null size, so that
+		// the offset of the newly
+		// created variable be computed
+		// from a variable which
+		// occupy space in the stack
+		// or global variable memory.
+		// This only apply to when v2
+		// was set to currentfunc->vlocal,
+		// and will not cause any issue
+		// when v2 was set otherwise.
+		while (!v2->size && (v2 = v2->prev) != currentfunc->vlocal);
+		
+		// The offset of the newly
+		// created variable is set null
+		// if its size is null.
+		v1->offset = !size ? 0 : iscurrentfuncvlocal ?
+			currentfunc->vlocalmaxsize : v2->offset;
+		
+		// If I am creating the variable within an union,
+		// the offset should not change and will remain null
+		// and no alignment will be done.
+		// If the last created variable had a size of zero,
+		// then it is a variable which do not occupy space
+		// in the stack or global variable memory (ei:
+		// dereference variable, etc...), it do not need to
+		// be aligned, and its offset is not used and left null.
+		// Note that member variables declared within an union
+		// have a non-null field size, but still they are not
+		// aligned as I previously explained and the test below
+		// for whether I am within an union prevent its offset
+		// to be modify and prevent it to be aligned.
+		// Note that the entire union when completed and used,
+		// each element of the union will be aligned to what
+		// the largest element(With a size less than sizeofgpr)
+		// will be aligned to; so I do not need to worry that
+		// the unionized variables of different size will be
+		// misalligned by not aligning the offsets.
+		if (statementparsingflag != PARSEUNION) {
+			
+			if (size) {
+				
+				if (!iscurrentfuncvlocal) v1->offset += v2->size;
+				
+				// The offset of pstruct members are not to be aligned.
+				if (statementparsingflag != PARSEPSTRUCT) {
+					// After having determined the offset of
+					// the variable, I need to align its offset
+					// if necessary using its size.
+					// Local and global variables as well as variables
+					// created for the arguments of a function are all
+					// aligned to sizeofgpr.
+					// Alternatively, if the size is greater than sizeofgpr,
+					// I align the offset to sizeofgpr and because native
+					// type have sizes which are powers of 2 and less than
+					// or equal to sizeofgpr, any member of a type (struct/pstruct/union)
+					// will be well aligned as well.
+					if (statementparsingflag != PARSESTRUCT || size > sizeofgpr) {
+						
+						v1->offset = (((v1->offset-1) & (-sizeofgpr)) + sizeofgpr);
+						
+					} else {
+						
+						v1->offset = (((v1->offset-1) & (-size)) + size);
+					}
+				}
+			}
+		}
+		
+	// I get here if the variable pointed by v1
+	// is the first variable of the linkedlist.
+	} else v1->next = v1;
+	
+	// I check whether I am within the declaration of
+	// a struct/pstruct/union, and set currenttype->v
+	// or currentfunc->vlocal appropriately with
+	// the last created element of its linkedlist.
+	if (currenttype) {
+		// Here I set the field prev to what was
+		// the last created variable. If there was no
+		// last created variable, it will be set to
+		// the newly created variable, in order
+		// to have a circular linkedlist.
+		if (currenttype->v) v1->prev = currenttype->v;
+		v1->next->prev = v1;
+		currenttype->v = v1;
+		
+	} else {
+		
+		v1->funcowner = currentfunc;
+		
+		if (statementparsingflag == PARSEFUNCTIONARG) {
+			
+			currentfunc->varg = v1;
+			
+			v1->argorlocal = &currentfunc->varg;
+			
+		} else {
+			// Here I set the field prev to what was
+			// the last created variable. If there was no
+			// last created variable, it will be set to
+			// the newly created variable, in order to have
+			// a circular linkedlist.
+			if (currentfunc->vlocal) v1->prev = currentfunc->vlocal;
+			v1->next->prev = v1;
+			currentfunc->vlocal = v1;
+			v1->argorlocal = &currentfunc->vlocal;
+			
+			// Remember that the total size of local variables
+			// change dynamically as variable get allocated and freed
+			// with varalloc() and varfree() (Except for global and static
+			// variables which are created within rootfunc and which
+			// are never freed); but I have to keep the maximum size
+			// that will be enough for the lifetime of the function
+			// and that information is used by immediate value of
+			// the type LYRICALIMMLOCALVARSSIZE; so here, if I find that
+			// the total size is greater than the current max size,
+			// I update the current max size.
+			
+			uint s = v1->offset + size;
+			
+			if (s > currentfunc->vlocalmaxsize) currentfunc->vlocalmaxsize = s;
+		}
+	}
+	
+	return v1;
+}
+
+
+
+// Enum type used with getvaraddr().
+typedef enum {
+	
+	MAKEALWAYSVOLATILE,
+	DONOTMAKEALWAYSVOLATILE
+	
+} getvaraddrflag;
+
+// Here I declare getvarnumber(), getvaraddr(),
+// dereferencevar() and processvaroffsetifany()
+// because they are needed within
+// "regmanipulations.tools.parsestatement.lyrical.c";
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto lyricalvariable* getvarnumber (u64 val, string cast);
+auto lyricalvariable* getvaraddr (lyricalvariable* v, getvaraddrflag flag);
+auto lyricalvariable* dereferencevar (lyricalvariable* v);
+auto uint processvaroffsetifany (lyricalvariable** v);
+
+#include "regmanipulations.tools.parsestatement.lyrical.c"
+
+// This function free the variable passed as argument.
+// The variable is simply removed from the linkedlist
+// it belong to and deallocated.
+// Registers are allocated and used only in the secondpass;
+// before freeing the lyricalvariable, I make sure
+// that there is no register allocated to it,
+// if they are any I discard them without flushing them.
+// I don't need to flush them because their value is not
+// needed anymore. The work of flushing the register
+// should be done before calling this function.
+// If it has not been done, then it mean that
+// the variable can be discarded without being flushed.
+// Note that if I was freeing a variable which had
+// its name suffixed with an offset, I wouldn't find
+// a register for it, since the field v of registers
+// never point to variables having their name suffixed
+// with an offset, it always point to the main variable;
+// in case I free the main variable first while a variable
+// having its name suffixed with an offset is still refering
+// to it; for that kind of situation it wouldn't be an issue,
+// because when that happen, the deallocation of the variable
+// having its name suffixed with an offset usually come soon after;
+// so both get deallocated at the same time and there is no
+// chance that I end up referring to a variable that do not exist.
+// Note that this function will only be called for variables created
+// in the linkedlist pointed by the field vlocal of functions.
+void varfree (lyricalvariable* v) {
+	// I first remove from its linkedlist,
+	// the variable to free.
+	// If the variable pointed by v was
+	// the only variable in its linkedlist,
+	// I simply set the field vlocal of the function
+	// it belong-to to null. Remember that
+	// this function is only called for variables
+	// created in the linkedlist pointed by
+	// the field vlocal of functions.
+	if (v->next != v) {
+		
+		if (v == v->funcowner->vlocal) v->funcowner->vlocal = v->prev;
+		v->prev->next = v->next;
+		v->next->prev = v->prev;
+		
+	} else v->funcowner->vlocal = 0;
+	
+	if (compilepass) {
+		// GPRs are available only in the secondpass.
+		// Here I make sure that there is no register
+		// allocated to the variable that I am about to free.
+		// If they are any I discard them without
+		// flushing them as I explained in the comments
+		// preceding this function; I also make sure
+		// to move the available register to the top
+		// of the linkedlist of gpr.
+		lyricalreg* r = currentfunc->gpr;
+		do {
+			if (r->v == v) {
+				
+				r->v = 0;
+				
+				if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+					
+					comment(stringfmt("reg %%%d discarded", r->id));
+				}
+				
+				setregtothetop(r);
+			}
+			
+			r = r->next;
+			
+		} while (r != currentfunc->gpr);
+	}
+	
+	// Here I free the allocated data that
+	// were used by the lyricalvariable.
+	
+	if (v->name.ptr) mmrefdown(v->name.ptr);
+	
+	if (v->type.ptr) mmrefdown(v->type.ptr);
+	if (v->cast.ptr) mmrefdown(v->cast.ptr);
+	
+	if (v->scope) mmrefdown(v->scope);
+	
+	// Finally I can free the memory used
+	// by the lyricalvariable itself.
+	mmrefdown(v);
+}
+
+
+// If the lyricalvariable given as argument
+// is a tempvar or a variable which relate to it
+// (dereference variables or variables having
+// their name suffixed with an offset),
+// this function will free it, and any other
+// variable which relate to the tempvar.
+// The variables freed are always local to currentfunc.
+void varfreetempvarrelated (lyricalvariable* v) {
+	// I check whether the lyricalvariable
+	// given as argument is a tempvar or
+	// a variable which relate to it
+	// (dereference variables or variables having
+	// their name suffixed with an offset).
+	// A tempvar name is formed using the string
+	// equivalent of the address of its lyricalvariable
+	// to which '$' is prefixed and suffixed; ei: "$45468479$".
+	string s = pamsynextract(matchtempvarname, v->name.ptr, stringmmsz(v->name));
+	
+	if (!s.ptr) {
+		// I get here, if I do not have a tempvar.
+		// It may have had its field bitselect set.
+		// I set it to null to prevent it from
+		// being used until set again.
+		v->bitselect = 0;
+		
+		// I also clear its field cast to prevent it
+		// from being used until set again.
+		if (v->cast.ptr) {
+			mmrefdown(v->cast.ptr);
+			v->cast = stringnull;
+		}
+		
+		return;
+	}
+	
+	// If I get here, I have a tempvar or a lyricalvariable
+	// which depend on a tempvar (dereference variable
+	// or variable with its name suffixed with an offset).
+	
+	// I insure that there is no lyricalvariable
+	// relating to that tempvar that is still among
+	// registered arguments, because it would mean
+	// that the lyricalvariable is still waiting
+	// to be used by a postfix operation for example.
+	
+	lyricalargument* arg = registeredargs;
+	
+	while (arg) {
+		
+		if (stringsearchright1(arg->varpushed->name, s)) {
+			
+			mmrefdown(s.ptr);
+			
+			return;
+		}
+		
+		arg = arg->nextregisteredarg;
+	}
+	
+	// I now search through currentfunc local variables.
+	
+	v = currentfunc->vlocal;
+	
+	while (1) {
+		// Because tempvar names are enclosed
+		// between the character '$' which is never
+		// used for symbol naming, simply searching
+		// through the name string of variables
+		// allow to safely catch all variables
+		// which relate to the tempvar.
+		if (stringsearchright1(v->name, s)) {
+			
+			varfree(v);
+			
+			// If the variable deleted was
+			// the last of the linkedlist,
+			// I should break-out of the loop.
+			if (!(v = currentfunc->vlocal)) break;
+			
+		// If I went through all the variables of the linkedlist,
+		// I should break out of the loop.
+		} else if ((v = v->next) == currentfunc->vlocal) break;
+	}
+	
+	mmrefdown(s.ptr);
+}
+
+
+// This function free the lyricaltype passed as argument.
+// The lyricaltype is simply removed from the linkedlist
+// it belong to and deallocated.
+// The lyricaltype being freed must belong
+// to the linkedlist pointed by currentfunc->t .
+void typefree (lyricaltype* t) {
+	// Remove t from the circular
+	// linkedlist currentfunc->t .
+	// if currentfunc->t == t,
+	// and t is not the remaining
+	// object of the linkedlist,
+	// currentfunc->t get set to t->prev .
+	void linkedlistcircularremove () {
+		
+		lyricaltype* currentfunct = currentfunc->t;
+		
+		lyricaltype* tnext = t->next;
+		
+		if (tnext != t) {
+			
+			lyricaltype* tprev = t->prev;
+			
+			if (currentfunct == t) currentfunc->t = tprev;
+			
+			tprev->next = tnext;
+			
+			tnext->prev = tprev;
+			
+		} else currentfunc->t = 0;
+	}
+	
+	// I first remove the lyricaltype
+	// to free from its linkedlist.
+	// currentfunc->t get set null
+	// if the lyricaltype was
+	// the only one in its linkedlist.
+	linkedlistcircularremove();
+	
+	// I free the allocated data that
+	// were used by the lyricaltype.
+	
+	// There is no need to check
+	// whether t->name.ptr is non-null
+	// because all lyricaltype have
+	// their field name set.
+	mmrefdown(t->name.ptr);
+	
+	if (t->scope) mmrefdown(t->scope);
+	
+	if (t->v) freevarlinkedlist(t->v);
+	
+	// Finally I can free the memory
+	// used by the lyricaltype itself.
+	mmrefdown(t);
+}
+
+
+// The field scope of lyricalvariable,
+// lyricalfunction or lyricaltype which
+// point to an array of uint, fully describes
+// in which scope they were created.
+// I can have 2 functions having the same
+// signature declared within the same function,
+// as long as they are within 2 different scopes.
+// Similarly, I can have 2 variables or 2 types
+// having the same name declared within the same function,
+// as long as they are within 2 different scopes.
+// Scope is not used with variables which
+// are generated by the compiler and which
+// test true when using isvarreadonly().
+// Scope is also not used with a tempvar;
+// those variables get freed by the time
+// I am done evaluating the expression
+// in which they had been created.
+
+// The functions scopeentering() and scopeleaving()
+// should not be called while processing an expression
+// otherwise variables could get deleted while
+// they are still used with a pushed argument.
+
+// This function is called before entering a scope.
+void scopeentering () {
+	
+	++scopecurrent;
+	
+	if (scopecurrent > scopedepth) {
+		
+		scope = mmrealloc(scope, scopecurrent*sizeof(uint));
+		scope[scopedepth] = 1;
+		
+		++scopedepth;
+		
+	} else ++scope[scopecurrent-1];
+}
+
+
+// This function is used to determine if a symbol is reacheable,
+// simply by comparing the uint array pointed by their fields scope.
+// The argument scopedepth determines how many uint must be compared
+// in the arrays pointed by s1 and s2.
+uint scopeiseq (uint* s1, uint* s2, uint scopedepth) {
+	
+	if (s1 && s2 && scopedepth) {
+		
+		do {
+			--scopedepth;
+			
+			if (s1[scopedepth] != s2[scopedepth]) return 0;
+			
+		} while (scopedepth);
+	}
+	
+	return 1;
+}
+
+// This function is called right after leaving a scope.
+void scopeleaving () {
+	// It is very safe to delete all variables and types
+	// which were created within a scope I am exiting,
+	// because there is no reference to any of them
+	// once I am done with the scope; not only it make
+	// the compiler use less memory, it also make
+	// the compiled program stack managed in a more
+	// efficient way by reusing space that was used
+	// by a variable within the scope that I am exiting.
+	// Static variables are not deleted when leaving a scope.
+	
+	lyricalvariable* v;
+	
+	if (v = currentfunc->vlocal) {
+		
+		while (1) {
+			
+			if (!v->isstatic && v->scopedepth == scopecurrent && scopeiseq(v->scope, scope, scopecurrent)) {
+				// Note that v->scope will
+				// be freed by varfree(v).
+				// Note also that varfree(v)
+				// will discard without flush,
+				// any register associated with
+				// the variable being deleted.
+				varfree(v);
+				
+				// If the variable deleted was
+				// the last of the linkedlist,
+				// I should break out of the loop;
+				// but if currentfunc->vlocal is true,
+				// it will be set to the last variable
+				// of the linkedlist and I am going
+				// to keep looking. Remember that
+				// I can no longer use the fields
+				// of the variable that I just freed,
+				// that's why I set v to the last
+				// created variable again.
+				if (!(v = currentfunc->vlocal)) break;
+				
+			// If I went through all the variables of the
+			// linkedlist, I should break out of the loop.
+			} else if ((v = v->next) == currentfunc->vlocal) break;
+		}
+	}
+	
+	lyricaltype* t;
+	
+	if (t = currentfunc->t) {
+		
+		while (1) {
+			
+			if (t->scopedepth == scopecurrent && scopeiseq(t->scope, scope, scopecurrent)) {
+				// Note that t->scope will
+				// be freed by typefree(t).
+				typefree(t);
+				
+				// If the deleted lyricaltype was the last of the linkedlist,
+				// I should break-out of the loop; but if currentfunc->t is true,
+				// it will be set to the last lyricaltype of the linkedlist
+				// and I am going to keep looking. Remember that I can no longer
+				// use the fields of the lyricaltype that I just freed, that's why
+				// I set t to the last created lyricaltype again.
+				if (!(t = currentfunc->t)) break;
+				
+			// I break-out of the loop if I went through
+			// all the lyricaltype of the linkedlist.
+			} else if ((t = t->next) == currentfunc->t) break;
+		}
+	}
+	
+	--scopecurrent;
+}
+
+// This function is used to set the fields scopedepth and scope of a type.
+void scopesnapshotfortype (lyricaltype* t) {
+	
+	if (scopecurrent) {
+		
+		t->scopedepth = scopecurrent;
+		
+		t->scope = mmalloc(scopecurrent*sizeof(uint));
+		
+		bytcpy(t->scope, scope, scopecurrent*sizeof(uint));
+		
+	} else {
+		
+		t->scopedepth = 0;
+		
+		t->scope = 0;
+	}
+}
+
+// This function is used to set the fields scopedepth and scope of a variable.
+void scopesnapshotforvar (lyricalvariable* v) {
+	
+	if (scopecurrent) {
+		
+		v->scopedepth = scopecurrent;
+		
+		v->scope = mmalloc(scopecurrent*sizeof(uint));
+		
+		bytcpy(v->scope, scope, scopecurrent*sizeof(uint));
+		
+	} else {
+		
+		v->scopedepth = 0;
+		
+		v->scope = 0;
+	}
+}
+
+// This function is used to set the fields scopedepth and scope of a function.
+void scopesnapshotforfunc (lyricalfunction* f) {
+	
+	if (scopecurrent) {
+		
+		f->scopedepth = scopecurrent;
+		
+		f->scope = mmalloc(scopecurrent*sizeof(uint));
+		
+		bytcpy(f->scope, scope, scopecurrent*sizeof(uint));
+		
+	} else {
+		
+		f->scopedepth = 0;
+		
+		f->scope = 0;
+	}
+}
+
+// This function is used to set the fields scopedepth and scope of a label.
+void scopesnapshotforlabel (lyricallabel* l) {
+	
+	if (scopecurrent) {
+		
+		l->scopedepth = scopecurrent;
+		
+		l->scope = mmalloc(scopecurrent*sizeof(uint));
+		
+		bytcpy(l->scope, scope, scopecurrent*sizeof(uint));
+		
+	} else {
+		
+		l->scopedepth = 0;
+		
+		l->scope = 0;
+	}
+}
+
+// This function is used to set the fields
+// scopedepth and scope of a catchablelabel.
+void scopesnapshotforcatchablelabel (lyricalcatchablelabel* cl) {
+	
+	if (scopecurrent) {
+		
+		cl->scopedepth = scopecurrent;
+		
+		cl->scope = mmalloc(scopecurrent*sizeof(uint));
+		
+		bytcpy(cl->scope, scope, scopecurrent*sizeof(uint));
+		
+	} else {
+		
+		cl->scopedepth = 0;
+		
+		cl->scope = 0;
+	}
+}
+
+// This function is used to set the fields scopedepth
+// and scope of a lyricallabeledinstructiontoresolve.
+void scopesnapshotforlabeledinstructiontoresolve (lyricallabeledinstructiontoresolve* litr) {
+	
+	if (scopecurrent) {
+		
+		litr->scopedepth = scopecurrent;
+		
+		litr->scope = mmalloc(scopecurrent*sizeof(uint));
+		
+		bytcpy(litr->scope, scope, scopecurrent*sizeof(uint));
+		
+	} else {
+		
+		litr->scopedepth = 0;
+		
+		litr->scope = 0;
+	}
+}
+
+
+// This function allocate memory for a new lyricaltype.
+// Only the fields next and name are set.
+// If name.ptr is null the name of the type
+// is generated using the value of curpos
+// converted to a string; it will never
+// conflict with alphanumeric string names
+// that a programmer use when naming types.
+lyricaltype* newtype (string name) {
+	// If the name of the type to create is given,
+	// I check if its name will not conflict with any
+	// variable or function name previously defined.
+	if (name.ptr) {
+		// Here I check if the name conflict with a keyword.
+		if (pamsynmatch2(iskeyword, name.ptr, stringmmsz(name)).start)
+			throwerror("a type name cannot be the same as a keyword");
+		
+		// Types, functions and variables cannot
+		// have the same name within the same scope.
+		// Within evaluateexpression() when parsing
+		// an expression which start with a paranthesis,
+		// what is within the paranthesis can be a type
+		// or an expression, and there would be confusion
+		// if a type could have the same name as
+		// a variable or function within the same scope.
+		// Similarly if a function could have the same
+		// name as a variable, there would be confusion
+		// because the name of a function used alone
+		// is a variable address of function.
+		
+		// I check if a symbol (type, function or variable)
+		// was not already declared within the current scope.
+		if (searchsymbol(name, INCURRENTSCOPEONLY).s != SYMBOLNOTFOUND)
+			throwerror("symbol already declared within this scope");
+	}
+	
+	// I allocate memory for a new type structure.
+	lyricaltype* t = mmallocz(sizeof(lyricaltype));
+	
+	// Add t to the top of the circular
+	// linkedlist currentfunc->t .
+	void linkedlistcircularaddtotop () {
+		
+		lyricaltype* currentfunct = currentfunc->t;
+		
+		if (currentfunct) {
+			
+			t->next = currentfunct;
+			t->prev = currentfunct->prev;
+			currentfunct->prev->next = t;
+			currentfunct->prev = t;
+			
+		} else {
+			
+			t->prev = t;
+			t->next = t;
+		}
+		
+		currentfunc->t = t;
+	}
+	
+	// I insert the newly created lyricaltype
+	// in the linkedlist currentfunc->t .
+	// currentfunc->t will remain set to
+	// the last created lyricaltype which
+	// is the the newly created lyricaltype.
+	linkedlistcircularaddtotop();
+	
+	// If name.ptr is null I generate a name which
+	// is the value of curpos converted to a string.
+	if (name.ptr) t->name = name;
+	else t->name = stringfmt("%d", (uint)curpos);
+	
+	scopesnapshotfortype(t);
+	
+	return t;
+}
+
+
+// This function create a new argument variable.
+// The argument type should be a valid type
+// already declared. There is no check on
+// whether the type was previously declared.
+lyricalvariable* newvararg (string name, string type) {
+	// Here I make sure that the type with which the variable is to be declared is not void.
+	if (stringiseq2(type, "void")) throwerror("an argument cannot be declared with a void type");
+	
+	// I check if the name conflict with a keyword.
+	if (pamsynmatch2(iskeyword, name.ptr, stringmmsz(name)).start) throwerror("invalid use of keyword");
+	
+	// I check if a variable argument with the same name
+	// was already declared within the current scope.
+	// Note that when searchvar() is used, local variables
+	// have not yet been created hence the search
+	// will be done only among arguments.
+	if (searchvar(name.ptr, stringmmsz(name), INCURRENTSCOPEONLY)) throwerror("duplicated argument");
+	
+	// There is no need to search if a type
+	// or function with the same name was already
+	// declared within the current scope because
+	// the body of the function has not yet
+	// been parsed, I am still just parsing
+	// the arguments.
+	
+	lyricalvariable* v = varalloc(sizeoftype(type.ptr, stringmmsz(type)), LOOKFORAHOLE);
+	
+	v->type = type;
+	v->name = name;
+	
+	return v;
+}
+
+
+// This function create a new member variable
+// or local variable depending on whether
+// I am parsing the declaration of a struct/pstruct/union
+// or parsing a function.
+// This function is never called with
+// its argument name set to stringnull.
+// The argument type should be a valid type
+// already declared and there is no check on whether
+// the type is valid; but when not creating
+// a variable member of a type, this function
+// can be called with the argument type set to null
+// if the variable to create is the kind of variable
+// which cannot have a type; those variables
+// without a type do not take up any memory space
+// in the stack or global variable region.
+// The field cast of the created variable is never set,
+// because the routine which call this function
+// is the one setting that field.
+// This function is not used to create a tempvar.
+lyricalvariable* newvarlocal (string name, string type) {
+	// If I am in the secondpass, I do not need
+	// to do these checks because they would have
+	// already been done in the firstpass.
+	if (!compilepass) {
+		// Here I make sure that the type with which
+		// the variable is to be declared is not void.
+		if (type.ptr && stringiseq2(type, "void"))
+			throwerror("a variable or type field cannot be declared as void");
+		
+		if (currenttype) {
+			// I check if a member variable with
+			// the same name was not already declared
+			// within the current struct/pstruct/union being defined.
+			// I check whether name.ptr[0] is null or '.', because
+			// searchtypemember() should not be called with
+			// its argument name set to an empty null terminated
+			// string, or called for a hidden member.
+			if (name.ptr[0] && name.ptr[0] != '.' && searchtypemember(currenttype, name))
+				throwerror("duplicate type member");
+			
+			// Variable member of a type can have
+			// the same name as a keyword, previously declared type,
+			// variable, function or label because it cannot
+			// create conflicts; the name of the variable member
+			// of a type is converted to an offset value before use.
+			
+		} else {
+			// I get here if I am not declaring
+			// a member variable of a struct/pstruct/union.
+			
+			// Here I check if the variable name
+			// conflict with a keyword.
+			if (pamsynmatch2(iskeyword, name.ptr, stringmmsz(name)).start)
+				throwerror("invalid use of keyword");
+			
+			// Types, functions and variables cannot
+			// have the same name within the same scope.
+			// Within evaluateexpression(), when parsing
+			// an expression which start with a paranthesis,
+			// what is within the paranthesis can be a type
+			// or an expression, and there would be confusion
+			// if a type could have the same name as a variable
+			// or function within the same scope.
+			// Similarly if a function could have the same name
+			// as a variable, there would be confusion because
+			// the name of a function used alone is
+			// a variable address of function.
+			
+			// I check if a symbol (type, function or variable)
+			// was not already declared within the current scope.
+			if (searchsymbol(name, INCURRENTSCOPEONLY).s != SYMBOLNOTFOUND)
+				throwerror("symbol already declared within this scope");
+		}
+	}
+	
+	lyricalvariable* v;
+	
+	if (type.ptr) {
+		
+		v = varalloc(sizeoftype(type.ptr, stringmmsz(type)), LOOKFORAHOLE);
+		
+		v->type = type;
+		
+	} else v = varalloc(0, LOOKFORAHOLE);
+	
+	v->name = name;
+	
+	if (!currenttype) scopesnapshotforvar(v);
+	
+	return v;
+}
+
+
+// This function create a new global variable.
+// Global variables are variables found in the linkedlist
+// pointed by rootfunc->vlocal.
+// The argument type should be a valid type already declared.
+// If the argument name.ptr is null, the name of the variable
+// to create is generated using the address value (converted
+// to a string) of its struct lyricalvariable to which
+// the character '0' get prefixed.
+// Passing a null string for the argument name is used
+// when creating a number variable, a constant string variable
+// or a variable address of a function; if the argument name
+// is stringnull then the field type should be set
+// to stringnull as well; if the argument name is non-null,
+// the argument type should also be non-null.
+// When the argument name is non-null and I am not within
+// the root function, I am creating a static variable
+// and the name of the variable is prefixed with
+// the address value (converted to a string)
+// of the struct lyricalfunction it belong to;
+// the prefix is surrounded with '#' and '_'.
+lyricalvariable* newvarglobal (string name, string type) {
+	// All global variables are on the same linkedlist
+	// pointed by rootfunc->vlocal.
+	// Static variables have their name prefixed with
+	// the address (Converted to a string) of the struct
+	// lyricalfunction they belong too; the prefix is
+	// surrounded with '#' and '_'.
+	// Because the address of the struct lyricalfunction
+	// is unique, there will never be a conflict
+	// between static variables having the same name
+	// and declared within different functions.
+	
+	// If I am in the secondpass, I do not need
+	// to do these checks because they would have
+	// already been done in the firstpass.
+	if (!compilepass) {
+		// Here I make sure that the type with which
+		// the variable is to be declared is not void.
+		if (type.ptr && stringiseq2(type, "void"))
+			throwerror("a variable cannot be declared as void");
+		
+		if (name.ptr) {
+			// I check if the name conflict with a keyword.
+			if (pamsynmatch2(iskeyword, name.ptr, stringmmsz(name)).start)
+				throwerror("invalid use of keyword");
+			
+			// Types, functions and variables cannot have
+			// the same name within the same scope.
+			// Within evaluateexpression() when parsing an expression
+			// which start with a paranthesis, what is within
+			// the paranthesis can be a type or an expression, and
+			// there would be confusion if a type could have the same
+			// name as a variable or function within the same scope;
+			// similarly if a function could have the same name as
+			// a variable, there would be confusion because the name
+			// of a function used alone is a variable address of function.
+			
+			// I check if a symbol (type, function or variable)
+			// was not already declared within the current scope.
+			if (searchsymbol(name, INCURRENTSCOPEONLY).s != SYMBOLNOTFOUND)
+				throwerror("symbol already declared within this scope");
+		}
+	}
+	
+	// If currentfunc was different from rootfunc,
+	// saving its value will allow me to restore it later.
+	lyricalfunction* savedcurrentfunc = currentfunc;
+	
+	// Global variables are created
+	// within the root function.
+	currentfunc = rootfunc;
+	
+	lyricalvariable* v;
+	
+	if (type.ptr) {
+		
+		v = varalloc(sizeoftype(type.ptr, stringmmsz(type)), DONOTLOOKFORAHOLE);
+		
+		v->type = type;
+		
+	} else v = varalloc(0, LOOKFORAHOLE);
+	
+	// Restore the value of currentfunc.
+	currentfunc = savedcurrentfunc;
+	
+	if (name.ptr) {
+		// If I am within the root function,
+		// this below is skipped and no prefixing is done.
+		if (currentfunc != rootfunc) {
+			
+			string s = stringfmt("#%d_", (uint)currentfunc);
+			
+			stringinsert1(&name, s, 0);
+			
+			mmrefdown(s.ptr);
+		}
+		
+		v->name = name;
+		
+		// Scope is not used with constant variable
+		// or variable address of function.
+		// I do not need to use isvarreadonly()
+		// because I only get here if I am not creating
+		// a constant variable or variable address of function.
+		scopesnapshotforvar(v);
+		
+		// Note that when using this function,
+		// when the argument name is set,
+		// the argument type is set as well; hence
+		// it is a variable explicitly declared
+		// by the programmer.
+		
+	} else v->name = stringfmt("0%d", (uint)v);
+	
+	return v;
+}
+
+
+// This function return a number variable
+// having the same value as the argument val
+// and set its field cast using a duplicate
+// of the argument cast.
+// Variable number do not have a type
+// because they do not reside in memory.
+lyricalvariable* getvarnumber (u64 val, string cast) {
+	
+	lyricalvariable* v;
+	
+	if (rootfunc->vlocal) {
+		// I save in v the pointer
+		// to the last global variable.
+		// Remember that rootfunc->vlocal point
+		// to the last created global variable
+		// and its field next point to
+		// the first created global variable.
+		v = rootfunc->vlocal;
+		
+		// Here I check whether there is
+		// an already existing number variable
+		// of the same value previously created.
+		do {
+			if (v->isnumber && v->numbervalue == val) {
+				// First duplicate the string cast,
+				// because in certain cases it was
+				// found to be the same as v->cast.
+				string s = stringduplicate1(cast);
+				
+				// Keep in mind that variable number do not
+				// have a type, only their cast is set.
+				if (v->cast.ptr) mmrefdown(v->cast.ptr); // Free the old cast.
+				
+				v->cast = s; // Set the new cast.
+				
+				return v; // I return what I found.
+			}
+			
+			v = v->next;
+			
+		} while (v != rootfunc->vlocal);
+	}
+	
+	// If I get here I couldn't find a variable
+	// of the same number so I need to create
+	// a new variable for the number.
+	// It is created as a global variable.
+	// The argument name of newvarglobal()
+	// is given as a null string so that
+	// a unique variable name be automatically
+	// created for the new variable.
+	// The argument type is also set with a null string
+	// because variable number do not have a type.
+	v = newvarglobal(stringnull, stringnull);
+	
+	v->isnumber = 1;
+	v->numbervalue = val; // Set the value of the number variable.
+	v->cast = stringduplicate1(cast); // Set the cast of the variable number.
+	
+	return v;
+}
+
+
+// This function return a lyricalvariable for
+// a string constant using the string given as argument.
+// The field cast of the lyricalvariable returned is set to "u8*".
+// Variable for string constant do not have a type
+// because they do not reside in memory.
+lyricalvariable* getvarforstringconstant (string value) {
+	// I first find the offset that
+	// the string constant will have
+	// within the string region.
+	
+	uint valuesz = stringmmsz(value);
+	
+	// Variable that will hold the offset
+	// that the string constant will have
+	// within the string region.
+	uint o = 0;
+	
+	if (stringconstants) {
+		
+		stringconstant* sc = stringconstants;
+		
+		while (1) {
+			
+			u8* ptr = sc->value.ptr;
+			
+			uint sz = stringmmsz(sc->value);
+			
+			// +1 account for the null terminating
+			// byte of the string constant.
+			o += sz +1;
+			
+			// The comparison is done against the end
+			// of each string constant in order to be
+			// able to re-use a portion of
+			// a string constant.
+			if (valuesz < sz) {
+				
+				uint n = sz - valuesz;
+				
+				ptr += n;
+				sz -= n;
+				
+			} else if (valuesz > sz) goto skipcomparison;
+			
+			if (stringiseq4(value.ptr, ptr, valuesz)) {
+				// I get here if I found a match.
+				
+				// +1 account for the null terminating
+				// byte of the string constant.
+				o -= sz +1;
+				
+				// The string given as argument to
+				// this function is no longer needed.
+				mmrefdown(value.ptr);
+				
+				break;
+			}
+			
+			skipcomparison:;
+			
+			stringconstant* scnext = sc->next;
+			
+			if (!scnext) {
+				// If I get here, I went through all
+				// stringconstant and could not find a match.
+				// I create a new stringconstant.
+				
+				scnext = mmalloc(sizeof(stringconstant));
+				
+				scnext->value = value;
+				
+				scnext->next = 0;
+				
+				sc->next = scnext;
+				
+				// Update the variable holding
+				// the total size that will be
+				// needed by the string region.
+				// +1 account for the null terminating
+				// byte of the string constant.
+				stringregionsz = (o + valuesz) +1;
+				
+				break;
+				
+			} else sc = scnext;
+		}
+		
+	} else {
+		// If I get here, there was no stringconstant,
+		// I create the first stringconstant.
+		
+		stringconstants = mmalloc(sizeof(stringconstant));
+		
+		stringconstants->value = value;
+		
+		stringconstants->next = 0;
+		
+		// Update the variable holding
+		// the total size that will be
+		// needed by the string region.
+		// +1 account for the null terminating
+		// byte of the string constant.
+		stringregionsz = valuesz +1;
+	}
+	
+	// The offset value is increment by 1 because
+	// the value set in the field isstring of a lyricalvariable
+	// for a string constant need to be able to represent
+	// an offset of 0; in fact a lyricalvariable is used
+	// for a string constant only if its field isstring
+	// is non-null.
+	++o;
+	
+	// I now find whether a lyricalvariable for
+	// the string constant offset o was already created;
+	// if not I create a new lyricalvariable for
+	// the string constant offset o.
+	// Remember that lyricalvariable for string constant offset
+	// are created among lyricalvariable for global variables
+	// which are found in the linkedlist pointed
+	// by rootfunc->vlocal.
+	
+	lyricalvariable* v;
+	
+	if (rootfunc->vlocal) {
+		// I save in v the pointer to the last global variable.
+		// Remember that rootfunc->vlocal point to the last created
+		// global variable and its field next point to the first
+		// created global variable.
+		v = rootfunc->vlocal;
+		
+		// Here I check whether there is an already existing
+		// lyricalvariable for the string constant offset o.
+		do {
+			if (v->isstring == o) {
+				// Keep in mind that lyricalvariable for string constant
+				// do not have a type, only their cast is set.
+				if (v->cast.ptr) mmrefdown(v->cast.ptr); // Free the old cast.
+				
+				v->cast = stringduplicate1(u8ptrstr); // Set the new cast.
+				
+				return v; // I return what I found.
+			}
+			
+			v = v->next;
+			
+		} while (v != rootfunc->vlocal);
+	}
+	
+	// If I get here I couldn't find a lyricalvariable
+	// for the string constant offset o; I create a new
+	// lyricalvariable for the string constant.
+	// It is created as a global variable.
+	// The argument name of newvarglobal() is given as a null
+	// string so that a unique variable name be automatically
+	// created for the new variable.
+	// The argument type is also set with a null string because
+	// lyricalvariable for string constant do not have a type.
+	v = newvarglobal(stringnull, stringnull);
+	
+	v->isstring = o;
+	
+	v->cast = stringduplicate1(u8ptrstr); // Set the cast.
+	
+	return v;
+}
+
+
+// This function is used to check if
+// the variable pointed by its argument *v
+// had an offset suffixed to its name.
+// If yes, It will find the main variable,
+// set it in its argument v, and return
+// an offset which give the location
+// of the variable from the beginning
+// of the main variable.
+uint processvaroffsetifany (lyricalvariable** v) {
+	// If the variable pointed by *v had an offset
+	// suffixed to its name, it is extracted;
+	string str = pamsynextract(matchoffsetifvarfield, (*v)->name.ptr, stringmmsz((*v)->name));
+	
+	if (str.ptr) {
+		// If I get here, the variable pointed
+		// by *v had an offset suffixed to
+		// its name and it was extracted to str;
+		
+		// The extracted suffix offset is converted
+		// to a number and set in the variable offset.
+		// I will never have something like "(&var.8).4";
+		// In fact using the operator '.' to select
+		// a field can only be applied to variables
+		// which reside in memory and "(&var.8)" is
+		// a constant variable for which the value
+		// is generated by the compiler.
+		uint offset = stringconverttoint1(str.ptr);
+		
+		// The string in str do not include
+		// the character dot which come before
+		// the offset string in the name
+		// of the variable pointed by v.
+		// +1 to the size of str will be
+		// as if the dot had been included
+		// in the string pointed by str;
+		// I will use the incremented value
+		// of the size to obtain the other part
+		// of the string in the name of the variable
+		// pointed by v in order to retrieve
+		// the main variable which do not
+		// have any suffixed offset.
+		uint sz = mmsz(str.ptr); // Instead of (stringmmsz(str) +1) for faster result.
+		
+		// I can free the string pointed by str;
+		mmrefdown(str.ptr);
+		
+		// I search for the main variable everywhere
+		// because it can be a local variable just like
+		// it can be a variable external to currentfunc.
+		// The variable is guarantied to have already
+		// been previously created because the operator '.'
+		// can only be used on an existing variables.
+		// The address of the variable which was suffixed
+		// with an offset is replaced in the pointer *v
+		// by the address of the main variable.
+		*v = searchvar((*v)->name.ptr, (stringmmsz((*v)->name) - sz), INCURRENTANDPARENTFUNCTIONS);
+		
+		return offset;
+		
+	} else return 0;
+}
+
+
+// I declare propagatevarchange() here because getvaraddr() need it.
+// ### GCC wouldn't compile without the use of the keyword auto.
+auto void propagatevarchange (lyricalvariable* v, uint offset, uint size);
+
+
+// This function obtain the lyricalvariable address
+// of the lyricalvariable passed to it as argument.
+// When the argument flag is MAKEALWAYSVOLATILE, obtaining
+// the lyricalvariable address of a lyricalvariable make it
+// an always volatile variable.
+// This function must not be used on a readonly variable.
+// The field type or cast of the lyricalvariable given as argument
+// to this function must be correct in order to correctly set
+// the cast of the lyricalvariable to return.
+lyricalvariable* getvaraddr (lyricalvariable* v, getvaraddrflag flag) {
+	// When I have a variable declared by the programmer,
+	// I create an address variable, if it was not yet created,
+	// with a name like: "(&var)".
+	// When I have a dereference variable such as "(*(cast)var)"
+	// where "cast" is the name of the type or cast used
+	// when dereferencing, no address variable is created
+	// and the variable which is its address is what is between
+	// "(*(cast)" and ")" hence the variable to return is "var";
+	// the cast embedded in the name of the dereference variable
+	// is used by getregforvar() to make the correct memory access
+	// when loading a register with the dereference variable value.
+	// ei: In an expression such as ((u16)(*(u8*)var)),
+	// I am making an 8bits memory access, but the cast
+	// of the dereference variable value will be a u16.
+	
+	lyricalvariable* vaddr;
+	
+	// If I have a variable such as "(*(cast)var)"
+	// where "cast" is the name of the type or cast
+	// used when dereferencing, with no field offset
+	// suffixed to the variable name; ei: (*(cast)var).8 ;
+	// I search for the variable between "(*(cast)" and ")".
+	// I am safe checking the second character of the string
+	// pointed by ptr because a variable name has at least
+	// 1 character followed by an extra space which is
+	// used to set it as a null terminated string.
+	if (v->name.ptr[1] == '*' && v->name.ptr[stringmmsz(v->name)-1] == ')') {
+		// A dereference variable start as follow "(*(cast)"
+		// where cast is the name of the type or cast
+		// used when dereferencing.
+		// This function is used to obtain the address location
+		// right after "(*(cast)" in the name of a dereference variable.
+		// Its argument should be set to the location right after "(*(".
+		// This function should never fail because it go through
+		// a type string that is supposed to have been correctly parsed.
+		u8* getcharaftercast (u8* c) {
+			
+			uint openingparanthesisfound = 0;
+			
+			while (1) {
+				
+				if (*c == ')') {
+					
+					if (!openingparanthesisfound) break;
+					
+					--openingparanthesisfound;
+					
+				} else if (*c == '(') ++openingparanthesisfound;
+				
+				++c;
+			}
+			
+			return ++c;
+		}
+		
+		u8* ptr = getcharaftercast(v->name.ptr + 3);
+		
+		// I search for the variable. There is no need to check vaddr,
+		// because I should certainly be able to find the variable,
+		// because the variable had to exist before I could create
+		// a variable surrounded with "(*(cast)" and ")".
+		// I use the address location which is after "(*(cast)" and
+		// I compute the size of the string between "(*(cast)" and ")".
+		vaddr = searchvar(
+			ptr,
+			(stringmmsz(v->name) - ((uint)ptr - (uint)v->name.ptr)) -1,
+			INCURRENTANDPARENTFUNCTIONS);
+		
+		// Clear the field cast. It will be set to something new.
+		if (vaddr->cast.ptr) mmrefdown(vaddr->cast.ptr);
+		
+		// Since v is a dereference variable,
+		// it only has a cast.
+		vaddr->cast = stringfmt("%s*", v->cast.ptr);
+		
+		// There is no need to determine whether
+		// to set the field alwaysvolatile of
+		// a lyricalvariable dereference when
+		// obtaining its lyricalvariable address,
+		// because lyricalvariable dereference are
+		// always made volatile by dereferencevar().
+		
+		return vaddr;
+	}
+	
+	// If I get here, the variable for which
+	// I need the address is a tempvar, an explicitly
+	// declared variable or a variable that has a name
+	// suffixed with an offset which represent
+	// a portion of a variable. ei: "var.8"; so I need
+	// to generate a variable such as "(&var)" or "(&var.8)".
+	
+	// I form the name of the variable
+	// address of the variable pointed by v.
+	string s = stringfmt("(&%s)", v->name.ptr);
+	
+	// I search for the variable within the current scope.
+	if (vaddr = searchvar(s.ptr, stringmmsz(s), INCURRENTSCOPEONLY)) {
+		// If I get here, then the address variable was already created.
+		
+		// The string pointed by s.ptr need to be deallocated
+		// to avoid memory leak, since I am not creating a variable,
+		// where it would have been used to set the name of the variable.
+		mmrefdown(s.ptr);
+		
+		// Clear the field cast. It will be set to something new.
+		if (vaddr->cast.ptr) mmrefdown(vaddr->cast.ptr);
+		
+	} else {
+		// If I get here, I create the address variable.
+		// For variables that do not occupy memory space,
+		// the argument type of newvarlocal() should be a null string.
+		// The cast of the new variable is set later.
+		vaddr = newvarlocal(s, stringnull);
+	}
+	
+	if (flag == MAKEALWAYSVOLATILE) {
+		
+		lyricalvariable* vv = v;
+		
+		// I call processvaroffsetifany() to check
+		// if the variable pointed by v had an offset
+		// suffixed to its name. If yes, it will find
+		// the main variable and set it in vv.
+		// Remember that the field v of a lyricalreg
+		// is always set with the main variable.
+		processvaroffsetifany(&vv);
+		
+		// Since the entire variable will become volatile,
+		// propagatevarchange() is called on the entire
+		// size of the variable.
+		// propagatevarchange() is to be called
+		// only for variable explicitly declared
+		// by the programmer, and the field id
+		// of a lyricalvariable is non-null
+		// only for such lyricalvariable.
+		if (vv->id) {
+			
+			propagatevarchange(vv, 0, vv->size);
+			
+			// GPRs are made available only
+			// in the secondpass and instructions
+			// are generated only in the secondpass.
+			if (compilepass) {
+				
+				lyricalreg* r = currentfunc->gpr;
+				
+				do {
+					// Since the entire variable will become
+					// volatile, any dirty register which has
+					// its field v set to the variable pointed
+					// by vv, should be flushed if it was dirty.
+					// Imagine I have a situation such as
+					// *(var = &var2) = 0; if var2 is not flushed
+					// when it become volatile, the dereferencing
+					// of var which will become volatile within
+					// dereferencevar(), will write out its value,
+					// which should have been written out after
+					// the value of var2 had been written out.
+					if (r->v == vv) {
+						
+						if (r->dirty) flushreg(r);
+						
+						// I discard the register and call setregtothetop()
+						// on the register, since next time a register
+						// for the variable will be obtained, it will be
+						// reloaded since it will be set volatile.
+						
+						r->v = 0;
+						
+						if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+							
+							comment(stringfmt("reg %%%d discarded", r->id));
+						}
+						
+						setregtothetop(r);
+					}
+					
+					r = r->next;
+					
+				} while (r != currentfunc->gpr);
+			}
+			
+			// The field *alwaysvolatile is set only after
+			// having called propagatevarchange() because
+			// if v was pushed, I want the duplicate of
+			// the argument to be generated using an already
+			// loaded register instead of reloading registers;
+			// in fact if the variable is set as volatile prior
+			// to duplicating it, a register reload will occur;
+			// but since the address of the variable is just being
+			// obtained and has not yet been used elsewhere where
+			// it could unexpectedly lead to the value of
+			// the variable to change, the variable should be
+			// set as volatile only after it has been duplicated.
+			*v->alwaysvolatile = 1;
+		}
+	}
+	
+	// Address variables only have a cast.
+	// I set the field cast of the address variable
+	// using a duplicate of the type or cast of the
+	// variable pointed by v, and I add an asterix
+	// to the cast since it represents the address
+	// of the variable pointed by v.
+	if (v->cast.ptr) vaddr->cast = stringduplicate1(v->cast);
+	else vaddr->cast = stringduplicate1(v->type);
+	
+	stringappend4(&vaddr->cast, '*');
+	
+	return vaddr;
+}
+
+
+// This function return the dereferenced variable
+// of the argument passed to it. Throw an error
+// if it is not possible to dereference the variable.
+// The field type or cast of the variable given
+// as argument to this function must be correct in order
+// to correctly set the cast of the variable to return.
+lyricalvariable* dereferencevar (lyricalvariable* v) {
+	// I test whether I can dereference
+	// the variable here, before actually
+	// searching whether a dereference variable
+	// of that name was created. Dereferencing
+	// do not generate any instructions;
+	// it simply generate a variable for which
+	// the address is in another variable.
+	// The type with which the variable is being
+	// dereferenced is embeded in the name
+	// of the dereferenced variable. ei:
+	// when dereferencing "var" which is
+	// a "uint*" it yields "(*(uint*)var)".
+	
+	// Unlike C, arrays cannot be dereferenced.
+	// In fact arrays are just large chunk
+	// of a particular type which are accessed
+	// as a table using the operator '[]'. ei:
+	// uint[4] myarray; #Here, using myarray in C
+	// will return the address of myarray and
+	// is the samething as &myarray. But in Lyrical
+	// there is a difference because myarray refer
+	// to the entire array, and &myarray is used
+	// to obtain the address of the entire array.
+	
+	string derefcast;
+	
+	// If the variable is casted I use the field
+	// cast, otherwise I use the field type.
+	if (v->cast.ptr) derefcast = stringduplicate1(v->cast);
+	else derefcast = stringduplicate1(v->type);
+	
+	// I check whether I can dereference
+	// the variable by checking if there is
+	// any asterix at the end of the string
+	// of its type string.
+	if (derefcast.ptr[stringmmsz(derefcast)-1] != '*')
+		throwerror("incorrect dereference");
+	
+	lyricalvariable* derefvar;
+	
+	// For variables such as "(&var)", I simply extract
+	// the variable between "(&" and ")"; so I need to check
+	// if I have '&' at position 2 in the string.
+	// Note that I can never have a variable such as "(&var).2",
+	// because an offset can only be suffixed to the name
+	// of variables that are not generated by the compiler.
+	if (v->name.ptr[1] == '&') {
+		// I search for the variable.
+		// There is no need to check vaddr,
+		// because I should certainly be able
+		// to find the variable, because it was
+		// created before "(&" and ")" was applied to it.
+		// I get the name between "(&" and ")" by
+		// simply adjusting the pointer and the size.
+		derefvar = searchvar(
+			v->name.ptr +2,		// Put me right after "(&".
+			stringmmsz(v->name) -3,	// Compute the size of the string between "(&" and ")".
+			INCURRENTANDPARENTFUNCTIONS);
+		
+		// Clear the cast if there is any.
+		if (derefvar->cast.ptr) {
+			mmrefdown(derefvar->cast.ptr);
+			derefvar->cast = stringnull;
+		}
+		
+		// I am certain that there is an asterix
+		// since it was already previously tested.
+		// So I decrease its size which will effectively
+		// remove the last asterix of the cast. ei:
+		// A type "uint**" become "uint*" after dereference.
+		stringchop(&derefcast, 1);
+		
+		// Here I make sure that I am
+		// not creating a void variable.
+		if (stringiseq2(derefcast, "void"))
+			throwerror("dereferencing result in a void variable");
+		
+		derefvar->cast = derefcast;
+		
+		return derefvar;
+	}
+	
+	// If I get here, I create the dereference
+	// if it was not created by adding
+	// "(*(cast)" and ")" around the name of
+	// the variable to dereference, where "cast"
+	// is the name of the type or cast used
+	// when dereferencing the variable.
+	
+	// I form the name of the variable
+	// containing the dereference.
+	string s = stringfmt("(*(%s)%s)", derefcast.ptr, v->name.ptr);
+	
+	// I search and check if the dereference
+	// variable was already created, searching
+	// for the variable within the current scope.
+	if (derefvar = searchvar(s.ptr, stringmmsz(s), INCURRENTSCOPEONLY)) {
+		// If I get here, then the dereferenced
+		// variable was already created.
+		
+		// I do not set the field alwaysvolatile
+		// of the retrieved lyricalvariable dereference
+		// because it is set only when it gets created.
+		
+		// The string pointed by s.ptr need
+		// to be deallocated to avoid memory leak,
+		// since I am not creating a variable,
+		// where it would have been used
+		// to set the name of the variable.
+		mmrefdown(s.ptr);
+		
+		// Clear the field cast. It will be set to something new.
+		if (derefvar->cast.ptr) mmrefdown(derefvar->cast.ptr);
+		
+	} else {
+		// If I get here, then I need to
+		// create the dereferenced variable.
+		// Note that because s.ptr[1] == '*',
+		// I use a null string for the argument type.
+		// The cast of the new variable is set later.
+		derefvar = newvarlocal(s, stringnull);
+		
+		// Dereferenced variables are always volatile.
+		*derefvar->alwaysvolatile = 1;
+	}
+	
+	// I am certain that there is an asterix
+	// since it was already previously tested.
+	// So I decrease its size which will effectively
+	// remove the last asterix of the cast. ei:
+	// A type "uint**" become "uint*" after dereference.
+	stringchop(&derefcast, 1);
+	
+	// Here I make sure that I am
+	// not creating a void variable.
+	if (stringiseq2(derefcast, "void"))
+		throwerror("dereferencing result in a void variable");
+	
+	// I need to remember that dereference variables
+	// do not have a type. So I only set their cast.
+	derefvar->cast = derefcast;
+	
+	return derefvar;
+}
+
+
+// This function is used to generate instructions
+// which duplicate the value of the lyricalvariable
+// pointed by the argument v.
+// The bitselect and volatility of the source
+// and destination lyricalvariable of
+// the duplication are taken into account.
+// When the argument *varduplicate is null,
+// getvarduplicate() create a tempvar for
+// the duplicate and set it in *varduplicate
+// then set its field type using the cast or type
+// of the lyricalvariable pointed by the argument v;
+// if *varduplicate is non-null, getvarduplicate()
+// use the lyricalvariable there as the duplicate.
+// When *varduplicate is non-null, it should
+// not be for a readonly variable.
+void getvarduplicate (lyricalvariable** varduplicate, lyricalvariable* v) {
+	// Used to hold the size of the duplicate variable.
+	uint sizeofvarduplicate;
+	
+	string varduplicatetype;
+	
+	if (*varduplicate) {
+		// Instructions are generated only in the secondpass.
+		if (!compilepass) return;
+		
+		// Note that because the variable which
+		// will contain the duplicated value
+		// already exist, I use the cast only
+		// if the variable is the kind of variable
+		// which do not have a type. ei: a dereference variable.
+		// This way I am sure that data will not be written
+		// beyond the real size of the variable in memory.
+		if ((*varduplicate)->type.ptr) {
+			
+			sizeofvarduplicate = (*varduplicate)->size;
+			
+			varduplicatetype = (*varduplicate)->type;
+		
+		} else {
+			
+			varduplicatetype = (*varduplicate)->cast;
+			
+			sizeofvarduplicate = sizeoftype(varduplicatetype.ptr, stringmmsz(varduplicatetype));
+		}
+		
+	} else {
+		// If I get here, I create a tempvar for the duplicate.
+		
+		string vcast = v->cast;
+		
+		if (vcast.ptr) sizeofvarduplicate = sizeoftype(vcast.ptr, stringmmsz(vcast));
+		else sizeofvarduplicate = v->size;
+		
+		*varduplicate = varalloc(sizeofvarduplicate, LOOKFORAHOLE);
+		
+		(*varduplicate)->name = generatetempvarname(*varduplicate);
+		
+		// Note that the field type will be null
+		// when obtained from varalloc(); also
+		// the field type of variables allocated
+		// with varalloc() get freed by varfree().
+		if (vcast.ptr) (*varduplicate)->type = stringduplicate1(vcast);
+		else (*varduplicate)->type = stringduplicate1(v->type);
+		
+		varduplicatetype = (*varduplicate)->type;
+		
+		// Instructions are generated only in the secondpass.
+		if (!compilepass) return;
+	}
+	
+	// Note that I never get pass here in the secondpass.
+	
+	// Used to hold the size of the variable pointed by v.
+	uint sizeofv;
+	
+	// If the variable to duplicate
+	// has its field type set, then
+	// the size that it will occupy
+	// in memory is used, otherwise
+	// its size is computed from its cast.
+	// This way I am sure that data will not
+	// be read beyond the real size of
+	// the variable in memory.
+	if (v->type.ptr) sizeofv = v->size;
+	else {
+		string vcast = v->cast;
+		
+		sizeofv = sizeoftype(vcast.ptr, stringmmsz(vcast));
+	}
+	
+	// The amount of data copied from
+	// the variable pointed by v to the variable
+	// pointed by *varduplicate is the minimum
+	// between the size of those two variables.
+	// Here sizeofvarduplicate is adjusted
+	// to the smallest between its value
+	// and the value of sizeofv.
+	if (sizeofv < sizeofvarduplicate) sizeofvarduplicate = sizeofv;
+	
+	if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+		comment(stringduplicate2("begin: copying variable"));
+	}
+	
+	lyricalreg* r1;
+	lyricalreg* r2;
+	
+	// The lyricalvariable pointed by *varduplicate
+	// always reside in memory, so there is no
+	// need to check it with isvarreadonly().
+	if (isvarreadonly(v) || sizeofvarduplicate <= sizeofgpr) {
+		// I get here if I am copying from
+		// a variable generated by the compiler,
+		// or if sizeofvarduplicate <= sizeofgpr;
+		
+		// Note that the volatility and bitselect
+		// of the variable being duplicated and
+		// the variable receiving the duplicate, are
+		// taken into account when using getregforvar().
+		// Remember that the bitselect will only
+		// be set for variables having a native type.
+		
+		string transfertype = largeenoughunsignednativetype(sizeofvarduplicate);
+		
+		if (v->isnumber) {
+			// I lock the allocated register to prevent
+			// another call to allocreg() from using it.
+			// I also lock it, otherwise it could be lost
+			// when insureenoughunusedregisters() is called
+			// while creating a new lyricalinstruction.
+			(r1 = getregforvar(*varduplicate, 0, varduplicatetype, (*varduplicate)->bitselect, FOROUTPUT))->lock = 1;
+			
+			// Instead of loading the constant
+			// variable value into a register,
+			// I use an immediate value;
+			// it prevent from triggering
+			// the flushing of registers which
+			// can occur when allocating a register.
+			li(r1, ifnativetypedosignorzeroextend(v->numbervalue, transfertype.ptr, stringmmsz(transfertype)));
+			
+		} else {
+			// I lock the allocated register to prevent
+			// another call to allocreg() from using it.
+			// I also lock it, otherwise it could be lost
+			// when insureenoughunusedregisters() is called
+			// while creating a new lyricalinstruction.
+			(r2 = getregforvar(v, 0, transfertype, v->bitselect, FORINPUT))->lock = 1;
+			// I process the input register first
+			// in order to take advantage of any
+			// already loaded register because,
+			// for the output register, any register
+			// overlapping the memory region it is
+			// associated with will be discarded
+			// in order to follow the rule about
+			// the loading of registers.
+			
+			(r1 = getregforvar(*varduplicate, 0, varduplicatetype, (*varduplicate)->bitselect, FOROUTPUT))->lock = 1;
+			
+			cpy(r1, r2);
+			
+			// Unlock lyricalreg.
+			// Locked registers must be unlocked
+			// only after the instructions using
+			// them have been generated; otherwise
+			// they could be lost when insureenoughunusedregisters()
+			// is called while creating a new lyricalinstruction.
+			r2->lock = 0;
+		}
+		
+		// If the destination lyricalvariable
+		// of the duplication is volatile,
+		// its dirty values should
+		// never be cached in registers.
+		if (*(*varduplicate)->alwaysvolatile) {
+			// getregforvar() certainly marked
+			// r1 dirty; hence there is no need to check
+			// whether r1->dirty is true before flushing it.
+			flushreg(r1);
+		}
+		
+		// Unlock lyricalreg.
+		// Locked registers must be unlocked
+		// only after the instructions using
+		// them have been generated; otherwise
+		// they could be lost when insureenoughunusedregisters()
+		// is called while creating a new lyricalinstruction.
+		r1->lock = 0;
+		
+	} else {
+		// If I get here, the source and destination
+		// of the copy certainly reside in memory and
+		// can safely be used with discardoverlappingreg().
+		// Registers overlapping the destination memory region
+		// of the copy should be discarded without being
+		// flushed since the memory region they are
+		// associated to will be written to.
+		// Registers overlapping the source memory region
+		// of the copy should be flushed without being discarded.
+		// There is no need to worry about the volatility
+		// of the destination variable, because the memcpy
+		// instruction copy directly from and to memory
+		// without loading to registers.
+		// The destination of the copy is processed first
+		// so that if the source and destination of the copy
+		// were overlapping, only a few flushing would need
+		// to be generated to flush any dirty register
+		// holding part of the source memory region.
+		discardoverlappingreg(*varduplicate, sizeofvarduplicate, 0, DISCARDALLOVERLAP);
+		discardoverlappingreg(v, sizeofvarduplicate, 0, FLUSHALLOVERLAPWITHOUTDISCARDINGTHEM);
+		
+		// I obtain the address variable of
+		// the destination and source variable.
+		lyricalvariable* varaddrofdest = getvaraddr(*varduplicate, DONOTMAKEALWAYSVOLATILE);
+		lyricalvariable* varaddrofsrc = getvaraddr(v, DONOTMAKEALWAYSVOLATILE);
+		
+		// I load in registers, the destination
+		// and source address; I also lock r1 and r2
+		// to prevent a call of allocreg() from using them.
+		// while allocating r3 if needed.
+		// Note that both variables used with getregforvar()
+		// will certainly not have a bitselect.
+		// Note also that because the memcpy instruction will
+		// modify the value of its input registers, the registers
+		// used with that instruction should be flushed if dirty
+		// and discarded in order to de-associate them from
+		// their variable.
+		
+		// I lock the allocated register to prevent
+		// another call to allocreg() from using it.
+		// I also lock it, otherwise it could be lost
+		// when insureenoughunusedregisters() is called
+		// while creating a new lyricalinstruction.
+		(r1 = getregforvar(varaddrofdest, 0, varaddrofdest->cast, 0, FORINPUT))->lock = 1;
+		
+		if (r1->dirty) flushreg(r1);
+		
+		r1->v = 0;
+		
+		// I lock the allocated register to prevent
+		// another call to allocreg() from using it.
+		// I also lock it, otherwise it could be lost
+		// when insureenoughunusedregisters() is called
+		// while creating a new lyricalinstruction.
+		(r2 = getregforvar(varaddrofsrc, 0, varaddrofsrc->cast, 0, FORINPUT))->lock = 1;
+		
+		if (r2->dirty) flushreg(r2);
+		
+		r2->v = 0;
+		
+		// This function check whether the lyricalvariable
+		// *varduplicate overlap the lyricalvariable v.
+		// The lyricalvariable *varduplicate and v are not
+		// dereferenced variables and reside both either
+		// in the stack or global variable region.
+		uint isvarduplicateoverlappingv () {
+			
+			lyricalvariable* vdest = *varduplicate;
+			
+			lyricalvariable* vsrc = v;
+			
+			uint vdestoffset = processvaroffsetifany(&vdest);
+			
+			uint vsrcoffset = processvaroffsetifany(&vsrc);
+			
+			// In order for the two variables being
+			// compared to overlap, they have to belong to
+			// the same function (Implying to the same stack
+			// or be both global variables) and be both
+			// either arguments or local variables.
+			if ((vdest->funcowner == vsrc->funcowner) &&
+				(vdest->argorlocal == vsrc->argorlocal)) {
+				// If I get here, using the offset of
+				// the variables within the stack or global
+				// variable region, and the offset from
+				// the beginning of those variables,
+				// I determine if the variables overlap.
+				if ((vdest->offset + vdestoffset == vsrc->offset + vsrcoffset) ||
+				((vdest->offset + vdestoffset < vsrc->offset + vsrcoffset) &&
+				(vdest->offset + vdestoffset + sizeofvarduplicate > vsrc->offset + vsrcoffset)) ||
+				((vdest->offset + vdestoffset > vsrc->offset + vsrcoffset) &&
+				(vdest->offset + vdestoffset < vsrc->offset + vsrcoffset + sizeofvarduplicate))) return 1;
+			}
+			
+			return 0;
+		}
+		
+		if (v->name.ptr[0] == '$' || (*varduplicate)->name.ptr[0] == '$' ||
+			v == &returnvar || *varduplicate == &returnvar ||
+			(v->name.ptr[1] != '*' && (*varduplicate)->name.ptr[1] != '*' && !isvarduplicateoverlappingv()))
+			memcpyi(r1, r2, sizeofvarduplicate/sizeofgpr);
+		else {
+			// If I get here, it mean that either the
+			// destination or source variable was not
+			// a tempvar, hence there is a chance that
+			// the destination and source variable
+			// might overlap; a tempvar can never overlap
+			// another variable; retvar is also a tempvar.
+			// 
+			// The addresses in r1 and r2 are compared
+			// because if the address in r2 is greater than
+			// the address in r1, the copy should be done
+			// from the bottom of the region to copy
+			// to prevent any data corruption.
+			// 
+			// Here below are the instructions generated:
+			// 
+			// ---------------------------------
+			// # If the source address is less than
+			// # the destination address, I jump where
+			// # the instruction memcpy2 is used in order
+			// # to copy from the bottom of the region to copy.
+			// sltu r3, r2, r1;
+			// jnz r3, copyfrombottom;
+			// memcpyi r1, r2, sizeofvarduplicate/sizeofgpr;
+			// j donecopying;
+			// copyfrombottom:
+			// addi r1, r1, sizeofvarduplicate-sizeofgpr;
+			// addi r2, r2, sizeofvarduplicate-sizeofgpr;
+			// memcpyi2 r1, r2, sizeofvarduplicate/sizeofgpr;
+			// donecopying:
+			// --------------------------------
+			// 
+			// Note that before the jump instructions and
+			// the labels used above, it is not necessary
+			// to flush and discard registers, because
+			// those branching instructions and labels
+			// are not generated to branch across code
+			// written by the programmer.
+			
+			// I create the name of the labels that will be needed below.
+			string labelnameforcopyfrombottom = stringfmt("%d", newgenericlabelid());
+			string labelnamefordonecopying = stringfmt("%d", newgenericlabelid());
+			
+			// Allocate a register to be used for the result
+			// of the comparison between r1 and r2.
+			lyricalreg* r3 = allocreg(CRITICALREG);
+			// I lock the allocated register
+			// otherwise it could be lost when
+			// insureenoughunusedregisters() is called
+			// while creating a new lyricalinstruction.
+			// I also lock the register, otherwise
+			// it will be seen as an unused register
+			// when generating lyricalinstruction,
+			// since it is not assigned to anything.
+			r3->lock = 1;
+			
+			sltu(r3, r2, r1);
+			jnz(r3, labelnameforcopyfrombottom);
+			
+			// Unlock lyricalreg.
+			// Locked registers must be unlocked only after
+			// the instructions using them have been generated;
+			// otherwise they could be lost when insureenoughunusedregisters()
+			// is called while creating a new lyricalinstruction.
+			r3->lock = 0;
+			
+			if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+				// The lyricalreg pointed by r3 is not allocated
+				// to a lyricalvariable but since I am done using it,
+				// I should also produce a comment about it having been
+				// discarded to complement the allocation comment that
+				// was generated when it was allocated.
+				comment(stringfmt("reg %%%d discarded", r3->id));
+			}
+			
+			memcpyi(r1, r2, sizeofvarduplicate/sizeofgpr);
+			j(labelnamefordonecopying);
+			newlabel(labelnameforcopyfrombottom);
+			addi(r1, r1, sizeofvarduplicate-sizeofgpr);
+			addi(r2, r2, sizeofvarduplicate-sizeofgpr);
+			memcpyi2(r1, r2, sizeofvarduplicate/sizeofgpr);
+			newlabel(labelnamefordonecopying);
+		}
+		
+		// Unlock lyricalreg.
+		// Locked registers must be unlocked only after
+		// the instructions using them have been generated;
+		// otherwise they could be lost when insureenoughunusedregisters()
+		// is called while creating a new lyricalinstruction.
+		r1->lock = 0;
+		r2->lock = 0;
+		
+		if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+			// The lyricalreg pointed by r1 and r2 were not allocated
+			// to a lyricalvariable but since I am done using them,
+			// I should also produce a comment about them having been
+			// discarded to complement the allocation comment that
+			// were generated when they were allocated.
+			comment(stringfmt("reg %%%d discarded", r1->id));
+			comment(stringfmt("reg %%%d discarded", r2->id));
+		}
+		
+		setregtothetop(r1);
+		setregtothetop(r2);
+	}
+	
+	if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+		comment(stringduplicate2("end: done"));
+	}
+}
+
+
+// In the firstpass, this function build
+// the propagation linkedlist of currentfunc.
+// In the secondpass, this function search
+// through all registered arguments (Which are
+// pushed arguments) for an argument which
+// overlap the variable specified through
+// the arguments v, offset and size; duplicate
+// its value if it has not yet been duplicated
+// and share that duplicate with any other
+// similar argument which has not yet been duplicated.
+// Only lyricalvariable for variables explicitly
+// declared by the programmer should be used with
+// this function because their id is non-null;
+// hence it should never be a tempvar,
+// a readonly variable or a dereference variable;
+// the lyricalvariable must have been used
+// with processvaroffsetifany() to insure that
+// there is no offset suffixed to its name.
+// The argument offset is the location within
+// the variable for which the lyricalvariable
+// is given as argument.
+// The argument size is the byte amount
+// from the offset given as argument.
+void propagatevarchange (lyricalvariable* v, uint offset, uint size) {
+	
+	if (compilepass) {
+		
+		if (compileargcompileflag&LYRICALCOMPILECOMMENT) {
+			comment(stringduplicate2("begin: propagating variable change"));
+		}
+		
+		// This function go through the linkedlist
+		// of registered arguments, and duplicate
+		// the variable associated with an argument
+		// if it overlap the variable pointed by v
+		// which is going to change.
+		void duplicateoverlapingarg () {
+			
+			lyricalargument* arg;
+			
+			lyricalvariable* argv;
+			
+			uint argvsize;
+			
+			uint argvoffset;
+			
+			// This function generate a new duplicate for
+			// the argument pointed by arg and look for other
+			// arguments similar to the argument pointed arg
+			// and make them share the same duplicate that
+			// was newly created.
+			// Making arguments share the same duplicate variable
+			// allow for not having to generate many duplicates
+			// for the same value being pushed, effectively
+			// saving instructions.
+			// Note that by the time this function is called,
+			// the variables argv, argvsize and argvoffset
+			// have been set by isargoverlappingv().
+			void duplicatearg () {
+				
+				lyricalvariable* v1 = argv;
+				
+				if (v1->cast.ptr) mmrefdown(v1->cast.ptr);
+				
+				v1->cast = stringduplicate1(arg->typepushed);
+				
+				// The field v1->bitselect is certainly null.
+				// A variable bitselect is unset when pushed.
+				// Note that the duplication of the argument is done
+				// without applying its bitselect; it is only when
+				// the argument need to be used that the bitselect
+				// saved in arg->bitselect is applied.
+				
+				lyricalvariable* varduplicate = 0;
+				
+				if (arg->flag->istobepassedbyref) {
+					// I get here if the argument is to be passed byref.
+					
+					// Since the variable is being passed byref,
+					// I append an additional '*', since arg->typepushed
+					// which was duplicated in v1->cast is
+					// the type of the lyricalvariable pointed by
+					// arg->varpushed, but the lyricalvariable pointed
+					// by v1 is its address variable.
+					stringappend4(&v1->cast, '*');
+				}
+				
+				getvarduplicate(&varduplicate, v1);
+				
+				arg->v = varduplicate;
+				
+				lyricalargument* argsearch = registeredargs;
+				
+				while (argsearch) {
+					// The argument should not be processed
+					// if its field flag->istobeoutput is set or
+					// if its field v point to a readonly variable.
+					if (!argsearch->flag->istobeoutput && !isvarreadonly(argsearch->v)) {
+						
+						lyricalvariable* v2 = argsearch->v;
+						
+						// The variables pointed by argv and v2 will
+						// certainly be variables explicitly declared
+						// by the programmer that either have their name
+						// suffixed with an offset or not; the reason being
+						// that they cannot be readonly variables which
+						// do not get duplicated, or dereferenced variables
+						// which are always volatile and get duplicated
+						// by pushargument().
+						// It is necessary to use processvaroffsetifany()
+						// on both argv and v2 because two variables such
+						// as: "var" and "var.0" could be pushed and their
+						// cast adjusted to where they have the same size;
+						// and if processvaroffsetifany() is not used,
+						// it wouldn't be possible to see that those two
+						// variables are the same.
+						
+						string v2type = stringduplicate1(argsearch->typepushed);
+						
+						if (argsearch->flag->istobepassedbyref) {
+							// I get here if the argument is to be passed byref.
+							
+							// Since the variable is being passed byref,
+							// I append an additional '*', since argsearch->typepushed
+							// which was duplicated in v2type is the type of
+							// the lyricalvariable pointed by argsearch->varpushed,
+							// but the lyricalvariable pointed by v2
+							// is its address variable.
+							stringappend4(&v2type, '*');
+						}
+						
+						uint v2size = sizeoftype(v2type.ptr, stringmmsz(v2type));
+						
+						mmrefdown(v2type.ptr);
+						
+						uint v2offset = processvaroffsetifany(&v2);
+						
+						if (argv == v2 && argvoffset == v2offset && argvsize == v2size)
+							argsearch->v = varduplicate;
+					}
+					
+					argsearch = argsearch->nextregisteredarg;
+				}
+			}
+			
+			// This function check whether the variable
+			// associated with the argument pointed by arg
+			// overlap the variable pointed by v.
+			// Note that by the time this function is called,
+			// the variables v, vsize and voffset have
+			// been correctly set.
+			uint isargoverlappingv () {
+				
+				argv = arg->v;
+				
+				argvoffset = processvaroffsetifany(&argv);
+				
+				string argtypepushed = arg->typepushed;
+				
+				argvsize = sizeoftype(argtypepushed.ptr, stringmmsz(argtypepushed));
+				
+				// If I get here, the variable associated
+				// with the argument pointed by arg reside
+				// either in the stack or global variable region;
+				// and in order for the two variables being
+				// compared to overlap, they have to belong to
+				// the same function (Implying to the same stack
+				// or be both global variables) and be both
+				// either arguments or local variables.
+				if ((argv->funcowner == v->funcowner) &&
+					(argv->argorlocal == v->argorlocal)) {
+					// If I get here, using the offset of
+					// the variables within the stack or global
+					// variable region, and the offset from
+					// the beginning of those variables,
+					// I determine if the variables overlap.
+					if ((argv->offset + argvoffset == v->offset + offset) ||
+					((argv->offset + argvoffset < v->offset + offset) &&
+					(argv->offset + argvoffset + argvsize > v->offset + offset)) ||
+					((argv->offset + argvoffset > v->offset + offset) &&
+					(argv->offset + argvoffset < v->offset + offset + size))) return 1;
+				}
+				
+				return 0;
+			}
+			
+			arg = registeredargs;
+			
+			while (arg) {
+				// The argument should not be processed
+				// by isargoverlappingv() if its field
+				// flag->istobeoutput is set or if its field v
+				// point to a readonly variable.
+				if (!arg->flag->istobeoutput && !isvarreadonly(arg->v) && isargoverlappingv()) {
+					// There was no check to insure that
+					// arg->v == arg->varpushed because
+					// the lyricalvariable pointed by v
+					// cannot possibly overlap a lyricalvariable
+					// that was created by duplicating
+					// the lyricalvariable pointed arg->varpushed .
+					if (arg->v != arg->varpushed) {
+						throwerror(stringfmt("internal error: %s: arg->v != arg->varpushed", __FUNCTION__).ptr);
+					}
+					
+					duplicatearg();
+				}
+				
+				arg = arg->nextregisteredarg;
+			}
+		}
+		
+		// duplicateoverlapingarg() is called
+		// only in the secondpass and argument
+		// duplication is done only
+		// in the secondpass.
+		duplicateoverlapingarg();
+		
+		if (compileargcompileflag&LYRICALCOMPILECOMMENT)
+			comment(stringduplicate2("end: done"));
+		
+	} else {
+		// In the firstpass, I build the propagation
+		// linkedlist of currentfunc using the arguments
+		// v, offset and size.
+		
+		// lyricalvariable with their field id null
+		// are not meant to be propagated.
+		// lyricalvariable with their field id non-null are
+		// for variables explicitly declared by the programmer.
+		if (!v->id) throwerror(stringfmt("internal error: %s: !v->id", __FUNCTION__).ptr);
+		
+		// This function will search the linkedlist
+		// of propagation elements pointed by currentfunc->p
+		// and return 1 if a propagation element for
+		// the lyricalvariable pointed by v do not exist
+		// in that linkedlist.
+		uint isnotinthelinkedlist () {
+			
+			lyricalpropagation* psearch = currentfunc->p;
+			
+			while (psearch) {
+				
+				if (psearch->type == VARIABLETOPROPAGATE &&
+					psearch->id == v->id &&
+					psearch->offset == offset &&
+					psearch->size == size) return 0;
+				
+				psearch = psearch->next;
+			}
+			
+			return 1;
+		}
+		
+		// Generate the prefix used with the name of
+		// static variables belonging to currentfunc.
+		string s = stringfmt("#%d_", (uint)currentfunc);
+		
+		uint ssz = stringmmsz(s);
+		
+		// If the changing variable do not belong to
+		// the current function, it is an external variable that
+		// I am modifying within the current function and
+		// I need to add it to the linkedlist of propagation
+		// elements pointed by currentfunc->p if it has not
+		// yet been added.
+		if (v != &thisvar && v != &returnvar && v->funcowner != currentfunc &&
+			(ssz >= stringmmsz(v->name) || !stringiseq4(s.ptr, v->name.ptr, ssz)) &&
+			isnotinthelinkedlist()) {
+			
+			// If I get here, I create a new propagation element
+			// in the linkedlist pointed by currentfunc->p.
+			// Note that I do not need to worry about the fact
+			// that the variable, for which the id is used with
+			// the propagation element, can get deleted when exiting
+			// a scope because when I exit a scope, I cannot reach
+			// the functions which had among their propagation elements
+			// the variables which got deleted, because in order for
+			// those functions to use those variables, they have
+			// to be in the same scope as those variables or
+			// in a deeper scope.
+			
+			lyricalpropagation* pnew = mmalloc(sizeof(lyricalpropagation));
+			
+			pnew->type = VARIABLETOPROPAGATE;
+			
+			pnew->f = v->funcowner;
+			pnew->id = v->id;
+			pnew->offset = offset;
+			pnew->size = size;
+			
+			pnew->next = currentfunc->p;
+			
+			currentfunc->p = pnew;
+		}
+		
+		mmrefdown(s.ptr);
+	}
+}
+
+
+// In the firstpass, this function build
+// the propagation linkedlist of currentfunc.
+// In the secondpass, this function propagate
+// within the current function the variables
+// changed by the function pointed by its argument f.
+// The argument f can be null only in
+// the secondpass; and when that is the case,
+// it mean that I wish to propagate the variables
+// changed by all functions for which
+// the address was obtained.
+// This function is used only within callfunctionnow().
+void propagatevarschangedbyfunc (lyricalfunction* f) {
+	// The argument f can be null only
+	// in the secondpass; and when that is
+	// the case, it mean that I wish to propagate
+	// the variables changed by all functions for
+	// which the address was obtained; and
+	// those propagations elements are stored
+	// in the linkedlist pointed
+	// by rootfunc->p.
+	if (!f) f = rootfunc;
+	
+	if (compilepass) {
+		
+		lyricalpropagation* p = f->firstpass->p;
+		
+		while (p) {
+			// In the secondpass, the propagation
+			// elements of type FUNCTIONTOPROPAGATE
+			// are skipped because at the end of
+			// the firstpass, all propagation elements
+			// of that type are resolved to propagation
+			// elements of type VARIABLETOPROPAGATE by
+			// resolvepropagations().
+			if (p->type == VARIABLETOPROPAGATE) {
+				// This function is used to search
+				// a variable matching its field id.
+				lyricalvariable* lookupvarbyid (uint id) {
+					
+					lyricalvariable* search (lyricalvariable* linkedlist) {
+						
+						lyricalvariable* v = linkedlist;
+						
+						do {
+							if (v->id == id) return v;
+							
+							v = v->next;
+							
+						} while (v != linkedlist);
+						
+						// If I get here, I couldn't find anything.
+						return 0;
+					}
+					
+					lyricalfunction* f = rootfunc;
+					
+					do {
+						lyricalvariable* v;
+						
+						if (f->vlocal && (v = search(f->vlocal))) return v;
+						
+						if (f->varg && (v = search(f->varg))) return v;
+						
+						f = f->prev;
+						
+					} while (f != rootfunc);
+					
+					// If I get here, I couldn't find anything.
+					return 0;
+				}
+				
+				lyricalvariable* v = lookupvarbyid(p->id);
+				
+				// If the variable looked up by lookupvarbyid()
+				// is found by searchvar(), it mean that
+				// it was reacheable from the current scope, and
+				// I need to call propagatevarchange() on it.
+				// Note that the lyricalvariable found will certainly
+				// be for a variable explicitly declared by
+				// the programmer, and which do not have its name
+				// suffixed with an offset, because only such
+				// lyricalvariable are used to created propagate elements
+				// and only such lyricalvariable should be used
+				// with propagatevarchange() in the secondpass.
+				if (v && (v == searchvar(v->name.ptr, stringmmsz(v->name), INCURRENTANDPARENTFUNCTIONS)))
+					propagatevarchange(v, p->offset, p->size);
+			}
+			
+			p = p->next;
+		}
+		
+	} else {
+		// In the firstpass, I build the propagation
+		// linkedlist of currentfunc.
+		
+		// No processing should be done if I am within
+		// the root function, because the root function
+		// is not a function declared by the programmer
+		// which can be called, so it should not have
+		// a linkedlist of propagation elements; but
+		// note that its field rootfunc->p is used to keep
+		// a linkedlist of propagation elements for
+		// variables which are modified by functions
+		// for which the address was obtained.
+		if (currentfunc != rootfunc) {
+			// This function will search the linkedlist
+			// of propagation elements pointed by currentfunc->p
+			// and return 1 if a propagation element
+			// for the lyricalfunction pointed by f
+			// do not exist in that linkedlist.
+			uint isnotinthelinkedlist () {
+				
+				lyricalpropagation* psearch = currentfunc->p;
+				
+				while (psearch) {
+					
+					if (psearch->type == FUNCTIONTOPROPAGATE &&
+						psearch->f == f) return 0;
+					
+					psearch = psearch->next;
+				}
+				
+				return 1;
+			}
+			
+			// I add the lyricalfunction pointed by f
+			// to the linkedlist of propagation elements
+			// pointed by currentfunc->p if it has not
+			// yet been added.
+			if (isnotinthelinkedlist()) {
+				// If I get here, I create a new propagation element
+				// in the linkedlist pointed by currentfunc->p.
+				
+				lyricalpropagation* pnew = mmalloc(sizeof(lyricalpropagation));
+				
+				pnew->type = FUNCTIONTOPROPAGATE;
+				
+				pnew->f = f;
+				
+				pnew->next = currentfunc->p;
+				
+				currentfunc->p = pnew;
+			}
+		}
+	}
+}

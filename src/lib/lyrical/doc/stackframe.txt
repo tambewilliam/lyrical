@@ -1,0 +1,164 @@
+
+--------------------------------------------------------------------------
+Copyright (c) William Fonkou Tambe
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.3
+or any later version published by the Free Software Foundation;
+with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.
+A copy of the license is included in the section entitled "GNU
+Free Documentation License".
+--------------------------------------------------------------------------
+
+
+
+Regular stackframe format
+-------------------------
+
+The stack grow toward lower memory address.
+
++--------------------------------+ Lower memory address.
+| uint holding the offset from the start of the stackframe
+| to the field holding the return address.
+| This field always exist.
+| This field is necessary in order to support functions
+| that are called through a variable pointer to function.
+|--------------------------------
+| Cached stackframe pointers.
+| This field do not exist if
+| there is no cached stackframe.
+|--------------------------------
+| Shared region; to be shared by more than one function
+| and which contain smaller format stackframes.
+| This field do not exist if no shared region were created.
+|--------------------------------
+| 1st local variable       # These fields do not exist if the function
+| 2nd local variable       # do not have any local variables.
+| nth local variable
+|--------------------------------
+| return address.
+| This field always exist.
+|--------------------------------
+| Pointer to the previous stackframe.
+| This field always exist.
+| This field is necessary in order to support functions
+| that are called through a variable pointer to function;
+| a function which was called through a variable pointer
+| to function retrieve its parent function stackframe
+| scanning through previous stackframes.
+|--------------------------------
+| Pointer to the stackframe of the function
+| parent to the function being called.
+| This field always exist.
+| This field is necessary in order to implement
+| nested functions and recursions.
+|--------------------------------
+| Stackframe-id.
+| Memory address of the start of the function.
+| This field always exist.
+| This field is necessary in order to support functions
+| that are called through a variable pointer to function.
+|--------------------------------
+| "this" variable pointer; address of the variable
+| through which the function was called.
+| This field always exist.
+| This field is null if the function used the keyword "this"
+| but was not called through a variable pointer to function.
+|--------------------------------
+| Return variable pointer; Address of the variable
+| to which the return value will be saved.
+| This field always exist.
+|-----------------------
+| 1st argument.
+| 2nd argument.                                        # These fields do not exist if the function
+| nth or variadic arguments.                           # do not have any arguments.
+| Null pointer to mark the end of variadic
+|     arguments if the function is variadic.
++--------------------------------+ Higher memory address
+
+Note that arguments and local variables are
+aligned to sizeof(uint) when written in the stack.
+
+
+
+Rootfunc stackframe format
+--------------------------
+Stackframe format used only by the rootfunc.
+
++--------------------------------+ Lower memory address.
+| uint holding the offset -3*sizeof(uint) from the start
+| of the stackframe to the field holding the stackframe-id.
+| So to get the actual offset, 3*sizeof(uint) is added
+| to the value retrieved from this field.
+| This field is used to compute the location
+| of the stackframe-id field.
+| This field is necessary in order to support functions
+| that are called through a variable pointer to function.
+| This field do not exist if the rootfunc shared region
+| was not created.
+|--------------------------------
+| Shared region; to be shared by more than one function
+| and which contain smaller format stackframes.
+| This field do not exist if the rootfunc shared region
+| was not created.
+|--------------------------------
+| Stackframe-id.
+| Memory address of the start of the rootfunc.
+| This field is necessary in order to support functions
+| that are called through a variable pointer to function.
+| This field do not exist if the rootfunc shared region
+| was not created.
++--------------------------------+ Higher memory address
+
+
+
+Tiny stackframe format
+----------------------
+A tiny stackframe is one that reside in
+the shared region of a regular stackframe
+or rootfunc stackframe.
+
+A tiny stackframe is used when a function:
+- Was not recursively called.
+- Its address was not obtained.
+- Its stack usage could fit
+	in the shared region
+	of a regular stackframe.
+
+Compared to a function that use
+a regular stackframe format,
+the call to a function that use
+a tiny stackframe format is fast
+because less work is needed
+to setup the stackframe.
+
+Its layout is as follow:
+
++--------------------------------+ Lower memory address.
+| return address.
+| This field always exist.
+|-----------------------------------
+| Pointer to the previous stackframe.
+| This field always exist.
+| Since the stack pointer register cannot
+| be restored by simply incrementing it,
+| this field is necessary in order to restore it
+| when returning from the function call.
+|--------------------------------
+| Return variable pointer; address of
+| the variable to which the return value
+| will be saved.
+| This field do not exist if the function
+| do not return a value.
+|-----------------------------------
+| 1st arg of function                  # These fields do not exist if the function
+| 2nd arg of function                  # do not have any arguments.
+| nth or variadic arguments.
+| Null pointer to mark the end of
+| variadic arguments if the function
+| is variadic.
+|-----------------------------------
+| 1st local variable of function       # These fields do not exist if the function
+| 2nd local variable of function       # do not have any local variables.
+| nth local variable of function
++--------------------------------+ Higher memory address.

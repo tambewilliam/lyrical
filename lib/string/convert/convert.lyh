@@ -1,0 +1,62 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`include "../hdr"
+
+# The stringconverttoint() functions convert
+# a string having an unsigned decimal, hexadecimal,
+# octale or binary notation, to an integer.
+# They stop at the first invalid character, or
+# at the limit set by the argument sz when used.
+# When u8** s for the string to convert is used,
+# the address where the conversion stopped
+# get updated in *s.
+# A decimal notation number cannot start with 0.
+# Overflow is ignored.
+# Here below are examples of strings accepted:
+# Decimal: 234
+# Hexadecimal: 0xaa13
+# Octale: 0o1234
+# Binary: 0b101110
+uint stringconverttoint (u8* s);
+uint stringconverttoint (u8* s, uint sz);
+uint stringconverttoint (u8** s);
+uint stringconverttoint (u8** s, uint sz);
+
+# Macro resolving to the number of digits
+# needed for the encoding of the largest
+# uint value, respectively to its decimal,
+# hexadecimal, octale and binary notations.
+`define STRINGMAXDECDIGITS ((sizeof(uint)*8)/4)
+`define STRINGMAXHEXDIGITS ((sizeof(uint)*8)/4)
+`define STRINGMAXOCTDIGITS ((sizeof(uint)*8)/3)
+`define STRINGMAXBINDIGITS (sizeof(uint)*8)
+
+# Functions converting their uint argument
+# to their corresponding encoding. ei:
+# respectively decimal, hexadecimal,
+# octale and binary.
+# Their argument buf must point to a buffer
+# large enough for the targetted encoding.
+# They return the number of digits
+# that resulted from the conversion.
+uint stringconverttodec (uint n, u8* buf); # The buffer size must be (STRINGMAXDECDIGITS+1).
+uint stringconverttohex (uint n, u8* buf); # The buffer size must be (STRINGMAXHEXDIGITS+1).
+uint stringconverttooct (uint n, u8* buf); # The buffer size must be (STRINGMAXOCTDIGITS+1).
+uint stringconverttobin (uint n, u8* buf); # The buffer size must be (STRINGMAXBINDIGITS+1).

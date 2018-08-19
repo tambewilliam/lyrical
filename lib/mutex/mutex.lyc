@@ -1,0 +1,127 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+# Library implementing mutex.
+
+# A mutex is used to serialize
+# access to a section of code that
+# cannot be executed concurrently
+# by more than one thread.
+# A mutex object only allow
+# one thread into a controlled section,
+# forcing other threads which attempt
+# to gain access to that section
+# to wait until the first thread
+# has exited from that section.
+
+# Threads get a lock in the order
+# in which they called mutexlock().
+
+
+# Struct representing a mutex.
+# Before use, the mutex should
+# be initialized using NULLMUTEX.
+struct mutex {
+	# This field is the lock used to prevent
+	# more than one thread from incrementing
+	# the field "t" at the same time.
+	uint l;
+	
+	# The fields "t" and "c"
+	# are used to insure that each thread
+	# having called mutexlock() on the same
+	# mutex, get a lock on the mutex
+	# in the order they called mutexlock().
+	# Each thread calling mutexlock()
+	# on the mutex, save the value
+	# from the field "t", increment it
+	# and enter a loop until the field "c"
+	# become equal to the value previously
+	# saved from the field "t".
+	# The field "c" is incremented
+	# everytime a thread call mutexunlock().
+	uint t;
+	uint c;
+};
+
+
+# This function enter a tight loop
+# until any other thread having called
+# this function on the mutex, call mutexunlock()
+# on the same mutex. Each thread having
+# called this function on the same mutex,
+# get out of the tight loop in the same
+# order they made the call.
+void mutexlock (mutex& s) {
+	# This function enter a loop until
+	# any other thread having called
+	# this function on the mutex,
+	# call mutexunlock() on the same mutex.
+	# Each thread having called this function
+	# on the same mutex, get out
+	# of the loop in the order
+	# they made the call.
+	
+	# Only one thread can have access to
+	# the field "t" of the mutex.
+	# This assembly code implement a spinlock
+	# using the field "l" of the mutex.
+	# If s.l has a null value, then it will
+	# be set atomically to 1 with no looping.
+	# If s.l has a value of 1, it mean that
+	# a lock is present and looping will occur
+	# until s.l is set null externally
+	# by another thread.
+	asm {
+		li %1, 1;
+		loop:
+		ldstr %1, &s.l;
+		jnz %1, loop;
+	}
+	
+	# If there is not enough tickets,
+	# I loop around until a ticket
+	# is made available.
+	# In fact if many ticket are being requested,
+	# the field "t" value may wrap around
+	# and catch up with the field "c" value.
+	# -1 is the maximum value of a uint.
+	while ((s.t - s.c) == -1);
+	
+	# Get the field "t" value.
+	uint i = s.t;
+	
+	# Update the field "t" to its next value.
+	++s.t;
+	
+	# Remove the lock which is used
+	# to insure that only one thread
+	# can modify the field "t".
+	s.l = 0;
+	
+	# Loop around until it is my turn.
+	while (s.c != i);
+}
+
+
+# This function return the lock
+# obtained on the mutex.
+void mutexunlock (mutex& s) {
+	++s.c;
+}

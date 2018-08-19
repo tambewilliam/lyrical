@@ -1,0 +1,136 @@
+
+# NOTE: The implementation of a rotatation native operator using <<< and >>>
+# was not done because it would have been too complex to handle native type
+# that have less than 32bits, since the hardware instruction operate
+# only on 32bits values.
+# It is simpler for the user to implement the rotation of variables
+# less than 32bits in a function or preprocessor macro.
+
+2012/03/19:
+Done implementing indentation checks.
+
+
+2012/03/09:
+Done implementing the preprocessor.
+
+
+2012/01/12:
+Done implementing stackframe sharing.
+
+
+2011/11/30:
+Done implementing predeclared variables.
+
+
+2011/11/23:
+Done implementing stackframe pointer caching.
+
+
+2011/10/03:
+Finished implementing block initialization beside the use
+of the native operator assign and '.' for a method call.
+
+
+2011/09/30:
+Finished implementing enum.
+
+
+2010/04/22:
+Fix the memory leak that occured when reading the name of a catchable-label to return-to while parsing
+the statement return. The string generated from the reading was not being freed; hence
+creating a memory leak.
+
+
+2010/04/21:
+Fixed the issue with the catchable-label statement not correctly been parsed when more than one comma separated
+labels to catchable-label were specified on the same catchable-label statement.
+curpos was not incremented to be after the comma once the comma was seen after reading
+a label name to catchable-label.
+
+
+2010/04/14:
+Finished implementating the instructions of the x86 backend.
+
+
+2010/03/23:
+Within the function load_reg_with_var_value() we made it so that when a value
+to load in a register is a number which is zero, we use %0 instead of an immediate
+value of zero which could be costly to read by the processor.
+---------
+In the file assembly.evaluate_expression, we made it so that expressions be evaluated
+in both the first and secondpass. It is important to evaluate expressions in both
+the first and secondpass; not doing so will for example make us skip events such as setting
+the field its_pointer_was_obtained of a function for which the address was obtained,
+simply because we would not have had the opportunity to do that setting within get_reg_for_var()
+because that field is only set if the address of the function get actually used.
+
+
+2010/03/21:
+The field linking_signature of a camer_function is now generated for every functions
+and not only for non-nested functions as it was previously implemented; and at that
+time we implemented it that way because it was to be used only for function importing
+and exporting, and functions which can be imported or exported are never nested.
+The reason for the change was because we wanted the text backend to be able to print out
+the signature of a function when generating its textual assembly.
+
+
+2010/03/19:
+The routine implemented in search_func() was wrong; after having done the search within
+current_func going through its previously created children, it would then do the search
+among functions which are previously created siblings to current_func and siblings to
+the parents of current_func, and then do the search among the parent functions
+of current_func; but that search arragement is wrong because while searching through
+the siblings of the parent functions, we should start from the parent function
+first, instead of starting by the siblings since the parent function is what is reacheable
+first before its siblings that were declared before it.
+
+
+2010/03/17:
+The functions scope_leaving() and var_inline_session_free() were modified because
+the loop used in those functions was wrongly implemented: The last variable
+of the linkedlist to go through wouldn't get processed, which in the case
+of var_inline_session_free() would lead us to select a wrong variable during the
+compilation because var_inline_session_free() had not removed the variable.
+The loop in those functions modified was rewritten to look more like a similar loop
+used in var_free_result_var_related() and which yield the correct results.
+
+
+2010/03/12:
+Within read_var_or_func(), when creating a constant string, the field size of
+the newly created camer_variable for the constant string, and
+the field root_func->v_local_max_size was set without taking into account
+the null terminating byte of the constant string; which would result
+in the next variable created in the global variable area to be created right after the
+last byte of the constant string. With no null terminating byte for the string, there
+is no way to determine where the constant string ends in memory.
+Also within camer_backend_x86_32_linux(), when writting each constant string to
+the global variable area of the binary, we made sure to set the null terminating
+byte of each string before writting it to the global variable area.
+
+
+2010/02/06:
+First successfull test of the x86 backend.
+
+
+2009/12/28:
+Start of the writting of the x86 backend.
+
+
+2009/12/16:
+Successful generation of textual representation of instructions.
+
+
+2009/11/28:
+Successful first tests attempts.
+
+
+2009/11/01:
+Start of documentation writting.
+
+
+2009/10/31:
+First successful compilation.
+
+
+2008/06/01:
+Project started.

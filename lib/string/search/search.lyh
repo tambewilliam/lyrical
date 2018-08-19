@@ -1,0 +1,64 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`include "../hdr"
+
+# These functions find the first occurence
+# of the string tosearch in the string s, searching
+# from left to right, and return the starting address
+# within s of the string found, otherwise null is returned.
+# The functions stringsearchright() take into account
+# the characters' case while the functions
+# stringsearchrightignorecase() do not.
+u8* stringsearchright (string s, string tosearch);
+u8* stringsearchright (string s, u8* tosearch);
+u8* stringsearchright (u8* s, string tosearch);
+u8* stringsearchright (u8* s, u8* tosearch);
+u8* stringsearchright (u8* s, uint ssz, string tosearch);
+u8* stringsearchright (u8* s, uint ssz, u8* tosearch);
+u8* stringsearchright (u8* s, uint ssz, u8* tosearch, uint tosearchsz);
+u8* stringsearchrightignorecase (string s, string tosearch);
+u8* stringsearchrightignorecase (string s, u8* tosearch);
+u8* stringsearchrightignorecase (u8* s, string tosearch);
+u8* stringsearchrightignorecase (u8* s, u8* tosearch);
+u8* stringsearchrightignorecase (u8* s, uint ssz, string tosearch);
+u8* stringsearchrightignorecase (u8* s, uint ssz, u8* tosearch);
+u8* stringsearchrightignorecase (u8* s, uint ssz, u8* tosearch, uint tosearchsz);
+
+# These functions find the first occurence
+# of the string tosearch in the string s, searching
+# from right to left, and return the starting address
+# within s of the string found, otherwise null is returned.
+# The functions stringsearchright() take into account
+# the characters' case while the functions
+# stringsearchrightignorecase() do not.
+u8* stringsearchleft (string s, string tosearch);
+u8* stringsearchleft (string s, u8* tosearch);
+u8* stringsearchleft (u8* s, string tosearch);
+u8* stringsearchleft (u8* s, u8* tosearch);
+u8* stringsearchleft (u8* s, uint ssz, string tosearch);
+u8* stringsearchleft (u8* s, uint ssz, u8* tosearch);
+u8* stringsearchleft (u8* s, uint ssz, u8* tosearch, uint tosearchsz);
+u8* stringsearchleftignorecase (string s, string tosearch);
+u8* stringsearchleftignorecase (string s, u8* tosearch);
+u8* stringsearchleftignorecase (u8* s, string tosearch);
+u8* stringsearchleftignorecase (u8* s, u8* tosearch);
+u8* stringsearchleftignorecase (u8* s, uint ssz, string tosearch);
+u8* stringsearchleftignorecase (u8* s, uint ssz, u8* tosearch);
+u8* stringsearchleftignorecase (u8* s, uint ssz, u8* tosearch, uint tosearchsz);

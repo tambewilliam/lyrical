@@ -1,0 +1,40 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`include "../hdr"
+
+# These functions return a string duplicate.
+string stringduplicate (string s);
+string stringduplicate (u8* s);
+string stringduplicate (u8* s, uint sz);
+string stringduplicate (u8 c);
+
+# NOTE: To debug where functions returning a string were used,
+# through MMDEBUG, a macro similar to the following can be used:
+#`define stringdbgduplicate(STR)
+#(string{.ptr = mmrealloc(stringduplicate(STR).ptr, -1)})
+#`enddef
+#`define stringdbgduplicate(STR)
+#(string{.ptr = mmrealloc(stringduplicate(STR).ptr, -1)})
+#`enddef
+#`define stringdbgduplicate(STR,SZ)
+#(string{.ptr = mmrealloc(stringduplicate(STR,SZ).ptr, -1)})
+#`enddef
+# All usage of "stringduplicate" must then be renamed
+# to their corresponding "stringdbgduplicate".

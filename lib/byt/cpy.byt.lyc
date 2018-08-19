@@ -1,0 +1,73 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+# Copy the memory region pointed by src
+# to the memory region pointed by dst,
+# taking into account that they may overlap.
+# If size is null, nothing is done.
+void bytcpy (void* dst, void* src, uint size) {
+	
+	if (dst < src) {
+		# Check whether src and dst are aligned to sizeof(uint)
+		# in order to use a uint copy.
+		if (((uint)dst|(uint)src)&(sizeof(uint)-1)) {
+			
+			asm memcpy dst, src, size/sizeof(uint);
+			
+			# Copy the rest of the data sizeof(u8) at a time.
+			
+			asm mem8cpy dst, src, size%sizeof(uint);
+			
+		} else {
+			
+			asm mem8cpy dst, src, size;
+		}
+		
+	} else if (dst > src) {
+		
+		dst += size;
+		src += size;
+		
+		# Check whether src and dst are aligned to sizeof(uint)
+		# in order to use a uint copy.
+		if (((uint)dst|(uint)src)&(sizeof(uint)-1)) {
+			
+			dst -= sizeof(uint);
+			src -= sizeof(uint);
+			
+			asm memcpy2 dst, src, size/sizeof(uint);
+			
+			# Copy the rest of the data sizeof(u8) at a time.
+			
+			dst += (sizeof(uint)-1);
+			src += (sizeof(uint)-1);
+			
+			asm mem8cpy2 dst, src, size%sizeof(uint);
+			
+		} else {
+			
+			--dst;
+			--src;
+			
+			asm mem8cpy2 dst, src, size;
+		}
+	}
+	
+	# There is nothing to do if src == dst.
+}

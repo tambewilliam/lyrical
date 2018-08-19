@@ -1,0 +1,991 @@
+
+--------------------------------------------------------------------------
+Copyright (c) William Fonkou Tambe
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.3
+or any later version published by the Free Software Foundation;
+with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.
+A copy of the license is included in the section entitled "GNU
+Free Documentation License".
+--------------------------------------------------------------------------
+
+
+
+This file document the full set
+of portable assembly instructions
+useable within an asm block.
+
+An assembly instruction start by its opcode
+name followed by comma separated arguments
+and terminated by a semi-colon.
+Not all assembly instruction take an argument.
+
+An assembly instruction argument can be
+either an expression, an immediate value,
+or a label.
+
+An expression is abreviated as "expr".
+An immediate value is abreviated as "imm".
+
+An expression can be either a register
+or made out of constants, variable, operators
+and function calls; but an expression can
+never mix the use of a register with a constant,
+a variable, operator or function call. ei:
+
+	add %4 + var1, var2, var3;
+
+The above example would be incorrect but
+the following example would be valid:
+
+	add %4, var1 + var2, var3;
+
+An immediate value can only be
+an integer or a character constant.
+
+
+
+Arithmetic instructions
+-----------------------
+
+add expr1, expr2, expr3
+	Compute expr1 = expr2 + expr3;
+
+
+addi expr1, expr2, imm
+	Compute expr1 = expr2 + imm;
+
+
+sub expr1, expr2, expr3
+	Compute expr1 = expr2 - expr3;
+
+
+neg expr1, expr2
+	Compute expr1 = -expr2;
+
+
+mul expr1, expr2, expr3
+	Integer multiplication.
+	Compute expr1 = expr2 * expr3;
+	The integer multiplication generate
+	a 2*8*sizeof(uint) bits value,
+	and the 8*sizeof(uint) lsb
+	of the result is saved in expr1.
+	The 8*sizeof(uint) lsb of a signed or
+	unsigned multiplication result is the same.
+
+
+mulh expr1, expr2, expr3
+	Signed integer high multiplication.
+	Compute expr1 = expr2 * expr3;
+	The integer multiplication generate
+	a 2*8*sizeof(uint) bits value,
+	and the 8*sizeof(uint) msb
+	of the result is saved in expr1.
+
+
+div expr1, expr2, expr3
+	Signed integer division.
+	Compute expr1 = expr2 / expr3;
+
+
+mod expr1, expr2, expr3
+	Signed integer modulo.
+	Compute expr1 = expr2 % expr3;
+
+
+mulhu expr1, expr2, expr3
+	Unsigned integer high multiplication.
+	Compute expr1 = expr2 * expr3;
+	The integer multiplication generate
+	a 2*8*sizeof(uint) bits value,
+	and the 8*sizeof(uint) msb
+	of the result is saved in expr1.
+
+
+divu expr1, expr2, expr3
+	Unsigned integer division.
+	Compute expr1 = expr2 / expr3;
+
+
+modu expr1, expr2, expr3
+	Unsigned integer modulo.
+	Compute expr1 = expr2 % expr3;
+
+
+muli expr1, expr2, imm
+	Integer multiplication.
+	Compute expr1 = expr2 * imm;
+	The integer multiplication generate
+	a 2*8*sizeof(uint) bits value,
+	and the 8*sizeof(uint) lsb
+	of the result is saved in expr1.
+	The 8*sizeof(uint) lsb of a signed or
+	unsigned multiplication result is the same.
+
+
+mulhi expr1, expr2, imm
+	Signed integer high multiplication.
+	Compute expr1 = expr2 * expr3;
+	The integer multiplication generate
+	a 2*8*sizeof(uint) bits value,
+	and the 8*sizeof(uint) msb
+	of the result is saved in expr1.
+
+
+divi expr1, expr2, imm
+	Signed integer division.
+	Compute expr1 = expr2 / imm;
+
+
+modi expr1, expr2, imm
+	Signed integer modulo.
+	Compute expr1 = expr2 % imm;
+
+
+divi2 expr1, expr2, imm
+	Signed integer division.
+	Compute expr1 = imm / expr2;
+
+
+modi2 expr1, expr2, imm
+	Signed integer modulo.
+	Compute expr1 = imm % expr2;
+
+
+mulhui expr1, expr2, imm
+	Unsigned integer high multiplication.
+	Compute expr1 = expr2 * expr3;
+	The integer multiplication generate
+	a 2*8*sizeof(uint) bits value,
+	and the 8*sizeof(uint) msb
+	of the result is saved in expr1.
+
+
+divui expr1, expr2, imm
+	Unsigned integer division.
+	Compute expr1 = expr2 / imm;
+
+
+modui expr1, expr2, imm
+	Unsigned integer modulo.
+	Compute expr1 = expr2 % imm;
+
+
+divui2 expr1, expr2, imm
+	Unsigned integer division.
+	Compute expr1 = imm / expr2;
+
+
+modui2 expr1, expr2, imm
+	Unsigned integer modulo.
+	Compute expr1 = imm % expr2;
+
+
+
+Bitwise instructions
+--------------------
+
+and expr1, expr2, expr3
+	Compute expr1 = expr2 & expr3;
+
+
+andi expr1, expr2, imm
+	Compute expr1 = expr2 & imm;
+
+
+or expr1, expr2, expr3
+	Compute expr1 = expr2 | expr3;
+
+
+ori expr1, expr2, imm
+	Compute expr1 = expr2 | imm;
+
+
+xor expr1, expr2, expr3
+	Compute expr1 = expr2 ^ expr3;
+
+
+xori expr1, expr2, imm
+	Compute expr1 = expr2 ^ imm;
+
+
+not expr1, expr2
+	Compute expr1 = ~expr2;
+
+
+cpy expr1, expr2
+	Compute expr1 = expr2;
+
+
+sll expr1, expr2, expr3
+	Logical left shift.
+	Compute expr1 = expr2 << expr3;
+
+
+slli expr1, expr2, imm
+	Logical left shift.
+	Compute expr1 = expr2 << imm;
+
+
+slli2 expr1, expr2, imm
+	Logical left shift.
+	Compute expr1 = imm << expr2;
+
+
+srl expr1, expr2, expr3
+	Logical right shift.
+	Compute expr1 = expr2 >> expr3;
+
+
+srli expr1, expr2, imm
+	Logical right shift.
+	Compute expr1 = expr2 >> imm;
+
+
+srli2 expr1, expr2, imm
+	Logical right shift.
+	Compute expr1 = imm >> expr2;
+
+
+sra expr1, expr2, expr3
+	Arithmetic right shift.
+	Compute expr1 = expr2 >> expr3;
+
+
+srai expr1, expr2, imm
+	Arithmetic right shift.
+	Compute expr1 = expr2 >> imm;
+
+
+srai2 expr1, expr2, imm
+	Arithmetic right shift.
+	Compute expr1 = imm >> expr2;
+
+
+zxt expr1, expr2, imm
+	Zero extend the value in expr2.
+	imm specify the count of least
+	significant bits to sign extend.
+	Nothing is done when imm is 0.
+
+
+sxt expr1, expr2, imm
+	Sign extend the value in expr2.
+	imm specify the count of least
+	significant bits to sign extend.
+	Nothing is done when imm is 0.
+
+
+
+Test instructions
+-----------------
+
+seq expr1, expr2, expr3
+	Compute expr1 = (expr2 == expr3);
+
+
+sne expr1, expr2, expr3
+	Compute expr1 = (expr2 != expr3);
+
+
+seqi expr1, expr2, imm
+	Compute expr1 = (expr2 == imm);
+
+
+snei expr1, expr2, imm
+	Compute expr1 = (expr2 != imm);
+
+
+slt expr1, expr2, expr3
+	Signed comparison.
+	Compute expr1 = (expr2 < expr3);
+
+
+slte expr1, expr2, expr3
+	Signed comparison.
+	Compute expr1 = (expr2 <= expr3);
+
+
+sltu expr1, expr2, expr3
+	Unsigned comparison.
+	Compute expr1 = (expr2 < expr3);
+
+
+slteu expr1, expr2, expr3
+	Unsigned comparison.
+	Compute expr1 = (expr2 <= expr3);
+
+
+slti expr1, expr2, imm
+	Signed comparison.
+	Compute expr1 = (expr2 < imm);
+
+
+sltei expr1, expr2, imm
+	Signed comparison.
+	Compute expr1 = (expr2 <= imm);
+
+
+sltui expr1, expr2, imm
+	Unsigned comparison.
+	Compute expr1 = (expr2 < imm);
+
+
+slteui expr1, expr2, imm
+	Unsigned comparison.
+	Compute expr1 = (expr2 <= imm);
+
+
+sgti expr1, expr2, imm
+	Signed comparison.
+	Compute expr1 = (expr2 > imm);
+
+
+sgtei expr1, expr2, imm
+	Signed comparison.
+	Compute expr1 = (expr2 >= imm);
+
+
+sgtui expr1, expr2, imm
+	Unsigned comparison.
+	Compute expr1 = (expr2 > imm);
+
+
+sgteui expr1, expr2, imm
+	Unsigned comparison.
+	Compute expr1 = (expr2 >= imm);
+
+
+sz expr1, expr2
+	Compute expr1 = !expr2;
+
+
+snz expr1, expr2
+	Compute expr1 = ?expr2;
+
+
+
+Branching instructions
+----------------------
+
+jeq expr1, expr2, label
+	if (expr1 == expr2) goto label;
+
+
+jeqi expr1, expr2, imm
+	if (expr1 == expr2) goto imm;
+
+
+jeqr expr1, expr2, expr
+	if (expr1 == expr2) goto expr;
+
+
+jne expr1, expr2, label
+	if (expr1 != expr2) goto label;
+
+
+jnei expr1, expr2, imm
+	if (expr1 != expr2) goto imm;
+
+
+jner expr1, expr2, expr
+	if (expr1 != expr2) goto expr;
+
+
+jlt expr1, expr2, label
+	if (expr1 < expr2) goto label;
+	signed comparison is used.
+
+
+jlti expr1, expr2, imm
+	if (expr1 < expr2) goto imm;
+	signed comparison is used.
+
+
+jltr expr1, expr2, expr
+	if (expr1 < expr2) goto expr;
+	signed comparison is used.
+
+
+jlte expr1, expr2, label
+	if (expr1 <= expr2) goto label;
+	signed comparison is used.
+
+
+jltei expr1, expr2, imm
+	if (expr1 <= expr2) goto imm;
+	signed comparison is used.
+
+
+jlter expr1, expr2, expr
+	if (expr1 <= expr2) goto expr;
+	signed comparison is used.
+
+
+jltu expr1, expr2, label
+	if (expr1 < expr2) goto label;
+	unsigned comparison is used.
+
+
+jltui expr1, expr2, imm
+	if (expr1 < expr2) goto imm;
+	unsigned comparison is used.
+
+
+jltur expr1, expr2, expr
+	if (expr1 < expr2) goto expr;
+	unsigned comparison is used.
+
+
+jlteu expr1, expr2, label
+	if (expr1 <= expr2) goto label;
+	unsigned comparison is used.
+
+
+jlteui expr1, expr2, imm
+	if (expr1 <= expr2) goto imm;
+	unsigned comparison is used.
+
+
+jlteur expr1, expr2, expr
+	if (expr1 <= expr2) goto expr;
+	unsigned comparison is used.
+
+
+jz expr, label
+	if (!expr) goto label;
+
+
+jzi expr, imm
+	if (!expr) goto imm;
+
+
+jzr expr1, expr2
+	if (!expr1) goto expr2;
+
+
+jnz expr, label
+	if (expr) goto label;
+
+
+jnzi expr, imm
+	if (expr) goto imm;
+
+
+jnzr expr1, expr2
+	if (expr1) goto expr2;
+
+
+j label
+	goto label;
+
+
+ji imm
+	goto imm;
+
+
+jr expr
+	goto expr;
+
+
+jl expr, label
+	goto label;
+	expr get set to the address
+	of the following instruction.
+
+
+jli expr, imm
+	goto imm;
+	expr get set to the address
+	of the following instruction.
+
+
+jlr expr1, expr2
+	goto expr2;
+	expr1 get set to the address
+	of the following instruction.
+
+
+jpush label
+	goto label;
+	the address of the following
+	instruction get pushed in the stack.
+
+
+jpushi imm
+	goto imm;
+	the address of the following
+	instruction get pushed in the stack.
+
+
+jpushr expr
+	goto expr;
+	the address of the following
+	instruction get pushed in the stack.
+
+
+jpop
+	Continue execution at an address
+	poped from the stack.
+
+
+
+Misc instructions
+-----------------
+
+afip expr, label
+	Set expr to the label address.
+
+
+li expr, imm
+	Compute expr = imm;
+
+
+
+Memory access instructions
+--------------------------
+
+ld8 expr1, expr2, imm
+	Compute expr1 = *(u8*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u8).
+
+
+ld8r expr1, expr2
+	Compute expr1 = *(u8*)expr2;
+	expr2 is expected to be aligned to sizeof(u8).
+
+
+ld8i expr, imm
+	Compute expr = *(u8*)imm;
+	imm is expected to be aligned to sizeof(u8).
+
+
+ld16 expr1, expr2, imm
+	Compute expr1 = *(u16*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u16).
+
+
+ld16r expr1, expr2
+	Compute expr1 = *(u16*)expr2;
+	expr2 is expected to be aligned to sizeof(u16).
+
+
+ld16i expr, imm
+	Compute expr = *(u16*)imm;
+	imm is expected to be aligned to sizeof(u16).
+
+
+ld32 expr1, expr2, imm
+	Compute expr1 = *(u32*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u32).
+
+
+ld32r expr1, expr2
+	Compute expr1 = *(u32*)expr2;
+	expr2 is expected to be aligned to sizeof(u32).
+
+
+ld32i expr, imm
+	Compute expr = *(u32*)imm;
+	imm is expected to be aligned to sizeof(u32).
+
+
+ld64 expr1, expr2, imm
+	Compute expr1 = *(u64*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u64).
+
+
+ld64r expr1, expr2
+	Compute expr1 = *(u64*)expr2;
+	expr2 is expected to be aligned to sizeof(u64).
+
+
+ld64i expr, imm
+	Compute expr = *(u64*)imm;
+	imm is expected to be aligned to sizeof(u64).
+
+
+ld expr1, expr2, imm
+	Compute expr1 = *(uint*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(uint).
+
+
+ldr expr1, expr2
+	Compute expr1 = *(uint*)expr2;
+	expr2 is expected to be aligned to sizeof(uint).
+
+
+ldi expr, imm
+	Compute expr = *(uint*)imm;
+	imm is expected to be aligned to sizeof(uint).
+
+
+st8 expr1, expr2, imm
+	Compute *(u8*)(expr2 + imm) = expr1;
+	(expr2 + imm) is expected to be aligned to sizeof(u8).
+
+
+st8r expr1, expr2
+	Compute *(u8*)expr2 = expr1;
+	expr2 is expected to be aligned to sizeof(u8).
+
+
+st8i expr, imm
+	Compute *(u8*)imm = expr1;
+	imm is expected to be aligned to sizeof(u8).
+
+
+st16 expr1, expr2, imm
+	Compute *(u16*)(expr2 + imm) = expr1;
+	(expr2 + imm) is expected to be aligned to sizeof(u16).
+
+
+st16r expr1, expr2
+	Compute *(u16*)expr2 = expr1;
+	expr2 is expected to be aligned to sizeof(u16).
+
+
+st16i expr, imm
+	Compute *(u16*)imm = expr1;
+	imm is expected to be aligned to sizeof(u16).
+
+
+st32 expr1, expr2, imm
+	Compute *(u32*)(expr2 + imm) = expr1;
+	(expr2 + imm) is expected to be aligned to sizeof(u32).
+
+
+st32r expr1, expr2
+	Compute *(u32*)expr2 = expr1;
+	expr2 is expected to be aligned to sizeof(u32).
+
+
+st32i expr, imm
+	Compute *(u32*)imm = expr1;
+	imm is expected to be aligned to sizeof(u32).
+
+
+st64 expr1, expr2, imm
+	Compute *(u64*)(expr2 + imm) = expr1;
+	(expr2 + imm) is expected to be aligned to sizeof(u64).
+
+
+st64r expr1, expr2
+	Compute *(u64*)expr2 = expr1;
+	expr2 is expected to be aligned to sizeof(u64).
+
+
+st64i expr, imm
+	Compute *(u64*)imm = expr1;
+	imm is expected to be aligned to sizeof(u64).
+
+
+st expr1, expr2, imm
+	Compute *(uint*)(expr2 + imm) = expr1;
+	(expr2 + imm) is expected to be aligned to sizeof(uint).
+
+
+str expr1, expr2
+	Compute *(uint*)expr2 = expr1;
+	expr2 is expected to be aligned to sizeof(uint).
+
+
+sti expr, imm
+	Compute *(uint*)imm = expr1;
+	imm is expected to be aligned to sizeof(uint).
+
+
+ldst8 expr1, expr2, imm
+	Atomically swap expr1 with *(u8*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u8).
+
+
+ldst8r expr1, expr2
+	Atomically swap expr1 with *(u8*)expr2;
+	expr2 is expected to be aligned to sizeof(u8).
+
+
+ldst8i expr, imm
+	Atomically swap expr with *(u8*)imm;
+	imm is expected to be aligned to sizeof(u8).
+
+
+ldst16 expr1, expr2, imm
+	Atomically swap expr1 with *(u16*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u16).
+
+
+ldst16r expr1, expr2
+	Atomically swap expr1 with *(u16*)expr2;
+	expr2 is expected to be aligned to sizeof(u16).
+
+
+ldst16i expr, imm
+	Atomically swap expr with *(u16*)imm;
+	imm is expected to be aligned to sizeof(u16).
+
+
+ldst32 expr1, expr2, imm
+	Atomically swap expr1 with *(u32*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u32).
+
+
+ldst32r expr1, expr2
+	Atomically swap expr1 with *(u32*)expr2;
+	expr2 is expected to be aligned to sizeof(u32).
+
+
+ldst32i expr, imm
+	Atomically swap expr with *(u32*)imm;
+	imm is expected to be aligned to sizeof(u32).
+
+
+ldst64 expr1, expr2, imm
+	Atomically swap expr1 with *(u64*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(u64).
+
+
+ldst64r expr1, expr2
+	Atomically swap expr1 with *(u64*)expr2;
+	expr2 is expected to be aligned to sizeof(u64).
+
+
+ldst64i expr, imm
+	Atomically swap expr with *(u64*)imm;
+	imm is expected to be aligned to sizeof(u64).
+
+
+ldst expr1, expr2, imm
+	Atomically swap expr1 with *(uint*)(expr2 + imm);
+	(expr2 + imm) is expected to be aligned to sizeof(uint).
+
+
+ldstr expr1, expr2
+	Atomically swap expr1 with *(uint*)expr2;
+	expr2 is expected to be aligned to sizeof(uint).
+
+
+ldsti expr, imm
+	Atomically swap expr with *(uint*)imm;
+	imm is expected to be aligned to sizeof(uint).
+
+
+mem8cpy expr1, expr2, expr3
+mem8cpy2 expr1, expr2, expr3
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u8)
+	to copy is given by expr3.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u8).
+	mem8cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem8cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem8cpy or mem8cpy2 was used respectively.
+	The value of expr3 is null at the end of the copy.
+
+
+mem8cpyi expr1, expr2, imm
+mem8cpyi2 expr1, expr2, imm
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u8)
+	to copy is given by imm.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u8).
+	mem8cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem8cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem8cpy or mem8cpy2 was used respectively.
+
+
+mem16cpy expr1, expr2, expr3
+mem16cpy2 expr1, expr2, expr3
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u16)
+	to copy is given by expr3.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u16).
+	mem16cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem16cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem16cpy or mem16cpy2 was used respectively.
+	The value of expr3 is null at the end of the copy.
+
+
+mem16cpyi expr1, expr2, imm
+mem16cpyi2 expr1, expr2, imm
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u16)
+	to copy is given by imm.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u16).
+	mem16cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem16cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem16cpy or mem16cpy2 was used respectively.
+
+
+mem32cpy expr1, expr2, expr3
+mem32cpy2 expr1, expr2, expr3
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u32)
+	to copy is given by expr3.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u32).
+	mem32cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem32cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem32cpy or mem32cpy2 was used respectively.
+	The value of expr3 is null at the end of the copy.
+
+
+mem32cpyi expr1, expr2, imm
+mem32cpyi2 expr1, expr2, imm
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u32)
+	to copy is given by imm.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u8).
+	mem32cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem32cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem32cpy or mem32cpy2 was used respectively.
+
+
+mem64cpy expr1, expr2, expr3
+mem64cpy2 expr1, expr2, expr3
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u64)
+	to copy is given by expr3.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u64).
+	mem64cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem64cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem64cpy or mem64cpy2 was used respectively.
+	The value of expr3 is null at the end of the copy.
+
+
+mem64cpyi expr1, expr2, imm
+mem64cpyi2 expr1, expr2, imm
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(u64)
+	to copy is given by imm.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(u8).
+	mem64cpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while mem64cpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	mem64cpy or mem64cpy2 was used respectively.
+
+
+memcpy expr1, expr2, expr3
+memcpy2 expr1, expr2, expr3
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(uint)
+	to copy is given by expr3.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(uint).
+	memcpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while memcpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	memcpy or memcpy2 was used respectively.
+	The value of expr3 is null at the end of the copy.
+
+
+memcpyi expr1, expr2, imm
+memcpyi2 expr1, expr2, imm
+	Copy data from the memory location
+	in expr2 to the memory location
+	in expr1; the count of sizeof(uint)
+	to copy is given by imm.
+	expr1 and expr2 are expected
+	to be aligned to sizeof(uint).
+	memcpy copy data incrementing the
+	memory locations in expr1 and expr2,
+	while memcpy2 copy data decrementing
+	the memory locations in expr1 and expr2.
+	At the end of the copy, expr1 and expr2
+	have addresses after or before the copied
+	memory region, depending on whether
+	memcpy or memcpy2 was used respectively.
+
+
+
+Memory allocation instructions
+------------------------------
+
+pagealloc expr1, expr2
+	Allocate pages of memory.
+	expr2 hold the count of pages
+	to allocate, while expr1 get set
+	to the pages allocated start address.
+
+
+pagealloci expr, imm
+	Allocate pages of memory.
+	imm hold the count of pages
+	to allocate, while expr get set
+	to the pages allocated start address.
+
+
+pagefree expr1, expr2
+	Free pages of memory.
+	expr2 hold the count of pages
+	to free, while expr1 hold
+	an address anywhere within
+	the first page to free.
+
+
+pagefreei expr, imm
+	Free pages of memory.
+	imm hold the count of pages
+	to free, while expr hold
+	an address anywhere within
+	the first page to free.

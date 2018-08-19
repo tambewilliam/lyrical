@@ -1,0 +1,223 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+# Lyrical syscalls enum.
+# It must match the corresponding enum
+# in the header used by the compiler.
+enum {
+	# See "Linux man 2 exit".
+	# arg0: status.
+	# Do not return a value.
+	LYRICALSYSCALLEXIT,
+	
+	# See "Linux man 2 creat".
+	# arg0: pathname.
+	# arg1: mode.
+	# Return a value.
+	LYRICALSYSCALLCREAT,
+	
+	# See "Linux man 2 open".
+	# arg0: pathname.
+	# arg1: flags.
+	# Return a value.
+	LYRICALSYSCALLOPEN,
+	
+	# See "Linux man 2 close".
+	# arg0: fd.
+	# Return a value.
+	LYRICALSYSCALLCLOSE,
+	
+	# See "Linux man 2 read".
+	# arg0: fd.
+	# arg1: buf.
+	# arg2: count.
+	# Return a value.
+	LYRICALSYSCALLREAD,
+	
+	# See "Linux man 2 write".
+	# arg0: fd.
+	# arg1: buf.
+	# arg2: count.
+	# Return a value.
+	LYRICALSYSCALLWRITE,
+	
+	# See "Linux man 2 lseek".
+	# arg0: fd.
+	# arg1: offset.
+	# arg2: whence.
+	# Return a value.
+	LYRICALSYSCALLSEEK,
+	
+	# See "Linux man 2 mmap".
+	# arg0: addr.
+	# arg1: length.
+	# arg2: prot.
+	# arg3: flags.
+	# arg4: fd.
+	# arg5: offset.
+	# Return a value.
+	LYRICALSYSCALLMMAP,
+	
+	# See "Linux man 2 munmap".
+	# arg0: addr.
+	# arg1: length.
+	# Return a value.
+	LYRICALSYSCALLMUNMAP,
+	
+	# See "Linux man 2 mprotect".
+	# arg0: addr.
+	# arg1: len.
+	# arg2: prot.
+	# Return a value.
+	LYRICALSYSCALLMPROTECT,
+	
+	# See "Linux man 3 getcwd".
+	# arg0: buf.
+	# arg1: size.
+	# Return a value.
+	LYRICALSYSCALLGETCWD,
+	
+	# See "Linux man 2 mkdir".
+	# arg0: pathname.
+	# arg1: mode.
+	# Return a value.
+	LYRICALSYSCALLMKDIR,
+	
+	# See "Linux man 2 chdir".
+	# arg0: path.
+	# Return a value.
+	LYRICALSYSCALLCHDIR,
+	
+	# See "Linux man 2 fchdir".
+	# arg0: path.
+	# Return a value.
+	LYRICALSYSCALLFCHDIR,
+	
+	# See "Linux man 2 rename".
+	# arg0: oldpath.
+	# arg1: newpath.
+	# Return a value.
+	LYRICALSYSCALLRENAME,
+	
+	# See "Linux man 2 link".
+	# arg0: oldpath.
+	# arg1: newpath.
+	# Return a value.
+	LYRICALSYSCALLLINK,
+	
+	# See "Linux man 2 symlink".
+	# arg0: oldpath.
+	# arg1: newpath.
+	# Return a value.
+	LYRICALSYSCALLSYMLINK,
+	
+	# See "Linux man 2 readlink".
+	# arg0: path.
+	# arg1: buf.
+	# arg2: bufsiz.
+	# Return a value.
+	LYRICALSYSCALLREADLINK,
+	
+	# See "Linux man 2 fork".
+	# Return a value.
+	LYRICALSYSCALLFORK,
+	
+	# See "Linux man 2 vfork".
+	# Return a value.
+	LYRICALSYSCALLVFORK,
+	
+	# See "Linux man 2 unlink".
+	# arg0: pathname.
+	# Return a value.
+	LYRICALSYSCALLUNLINK,
+	
+	# See "Linux man 2 rmdir".
+	# arg0: pathname.
+	# Return a value.
+	LYRICALSYSCALLRMDIR,
+	
+	# See "Linux man 2 stat".
+	# arg0: path.
+	# arg1: buf.
+	# Return a value.
+	LYRICALSYSCALLSTAT,
+	
+	# See "Linux man 2 fstat".
+	# arg0: fd.
+	# arg1: buf.
+	# Return a value.
+	LYRICALSYSCALLFSTAT,
+	
+	# See "Linux man 2 lstat".
+	# arg0: path.
+	# arg1: buf.
+	# Return a value.
+	LYRICALSYSCALLLSTAT,
+	
+	# See "Linux man 2 access".
+	# arg0: pathname.
+	# arg1: mode.
+	# Return a value.
+	LYRICALSYSCALLACCESS,
+	
+	# See "Linux man 2 chown".
+	# arg0: path.
+	# arg1: owner.
+	# arg2: group.
+	# Return a value.
+	LYRICALSYSCALLCHOWN,
+	
+	# See "Linux man 2 fchown".
+	# arg0: fd.
+	# arg1: owner.
+	# arg2: group.
+	# Return a value.
+	LYRICALSYSCALLFCHOWN,
+	
+	# See "Linux man 2 lchown".
+	# arg0: path.
+	# arg1: owner.
+	# arg2: group.
+	# Return a value.
+	LYRICALSYSCALLLCHOWN,
+	
+	# See "Linux man 2 chmod".
+	# arg0: path.
+	# arg1: mode.
+	# Return a value.
+	LYRICALSYSCALLCHMOD,
+	
+	# See "Linux man 2 fchmod".
+	# arg0: fd.
+	# arg1: mode.
+	# Return a value.
+	LYRICALSYSCALLFCHMOD,
+	
+	# See "Linux man 2 truncate".
+	# arg0: path.
+	# arg1: length.
+	# Return a value.
+	LYRICALSYSCALLTRUNCATE,
+	
+	# See "Linux man 2 ftruncate".
+	# arg0: fd.
+	# arg1: length.
+	# Return a value.
+	LYRICALSYSCALLFTRUNCATE
+};

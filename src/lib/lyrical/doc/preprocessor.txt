@@ -1,0 +1,337 @@
+
+--------------------------------------------------------------------------
+Copyright (c) William Fonkou Tambe
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.3
+or any later version published by the Free Software Foundation;
+with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.
+A copy of the license is included in the section entitled "GNU
+Free Documentation License".
+--------------------------------------------------------------------------
+
+
+
+This file describe the usage of
+all the preprocessor directives.
+
+A preprocessor directive start
+with the character '`' immediately
+followed by the directive name.
+
+
+
+define, enddef, undef, locdef
+-----------------------------
+The preprocessor directive `define or `locdef
+is used to define a macro where a macro defined
+using `locdef is visible only within the file
+(and files that it include after the definition)
+where it is defined.
+
+A macro is a fragment of code which has been
+given a name. Whenever the name is used, it is
+replaced by the content of the macro.
+There are two kinds of macros: an object-like macro
+resemble a data object when used; a function-like macro
+resemble a function call when used and its definition
+span multiple lines.
+
+The name of a function-like macro use digits and
+exclusively either uppercase or lowercase characters;
+in other words uppercase and lowercase characters cannot
+be mixed in the name of a function-like macro.
+
+The name of an object-like macro can
+only use digits and uppercase characters.
+
+The name of a macro cannot be the same as
+a preprocessor directive or a previously defined
+macro, unless the previously defined macro has been
+undefined using the directive `undef.
+The name of a macro cannot also be the same as
+FILE or LINE which are made available by the preprocessor.
+The macro FILE expand to a double quoted string that is
+the filepath where it is used, while the macro LINE expand
+to the linenumber where it is used.
+
+An object-like macro is created by following
+the directive `define by the name of the macro
+and then the fragment of code it should be
+an abbreviation for. ei:
+
+	`define BUFFERSIZE 1024
+
+The above example define a macro named BUFFERSIZE as
+an abbreviation for the text 1024. If somewhere after
+the `define directive there is an expression such as
+
+	ptr = mmalloc(BUFFERSIZE);
+
+the macro BUFFERSIZE get expanded resulting in the following:
+
+	ptr = mmalloc(1024);
+
+While defining a macro, any previously declared macro
+used in its definition get expanded. ei:
+
+	`define PAGESIZE (4*BUFFERSIZE)
+
+The above example will yield a macro for which
+the content is: "(4*1024)".
+
+The definition of an object-like macro cannot continue
+onto the next line.
+
+Defining the content of an object-like macro is optional. ei:
+
+	`define DEBUG
+
+The above example will yield a macro that is defined
+but for which the content is empty or in other words
+a null string.
+
+A function-like macro is created by following
+the directive `define by the name of the macro,
+immediately followed by a pair of parentheses
+containing one or more argument names; then
+followed by the content of the macro, and
+terminated by the `enddef directive. ei:
+
+	`define mmalloc(SIZE)
+	mmdebugalloc(SIZE, FILE, LINE);
+	`enddef
+
+The above example define a function-like macro
+called "mmalloc" which take one argument called "SIZE".
+
+If there is a space between the macro name
+and the opening parenthese, an object-like macro
+will be defined instead, where the content of
+the object-like macro will start with
+the opening parenthese and terminate
+at the end of the line.
+
+The argument of a function-like macro is itself
+an object-like macro which can only be used within
+the content of the function-like macro; the value
+of the argument of a function-like macro get set
+when the function-like macro is invoked.
+
+The name of the argument of a function-like macro
+can only use uppercase characters and digits.
+
+Note that macros expansion within the content of
+a macro is done only when the macro is being defined;
+with the exception of the macro FILE and LINE which
+get expanded within the content of a macro during
+its invocation.
+
+An error is thrown if a macro get used within
+its own definition; in other words, a macro
+that is being defined cannot be used.
+
+Undefining a previously defined macro is done
+using the preprocessor directive `undef followed
+by the name of one or more macro to undefine. ei:
+
+	`undef MACRONAME1 macroname2 MACRONAME3
+
+Two or more macro are concatenated using
+the character '_' ei:
+
+	`define MACRO1 var
+	`define MACRO2 ptr
+	MACRO1_MACRO2
+
+The above example will yield "varptr".
+
+The character '_' is removed from the source
+code to compiled and its left is concatenated
+with its right regardless of whether it is a macro.
+
+Macro expansion and concatenation is not done within
+a double quoted string unless the double quoted string
+is used with the `define preprocessor directive when
+defining an object-like macro.
+
+
+
+include
+-------
+Preprocessor directive used to include one
+or more file at the location in the file
+where the directive was used.
+
+Each file name must be specified within
+double quotes. ei:
+
+	`include "mm.h" "match.h"
+
+Since pathnames are within double quotes,
+it can contain spaces without creating confusion;
+macro expansion is not done to the pathnames.
+
+If the pathname given start with "/",
+the file to include is searched from the root
+of the filesystem.
+If the pathname given start with "./" or "../",
+the file to include is searched from the current
+directory containing the file in which
+the preprocessor directive is used.
+If the pathname given do not start with
+either "/", "./" or "../", the file is searched
+from the standard include path location.
+
+If the file to include is a folder,
+it is considered a module.
+In fact, including a folder, is
+the mechanism by which a module is used.
+The preprocessor automatically look to include
+the matching .lyh file found in the folder;
+if a maching .lyc file exist within the folder,
+it is automatically included in a nested scope,
+otherwise, the include is noted as a module
+to instantiate at runtime, which result in the compiler
+generating instructions to call its rootfunc.
+The meaning of "matching" is a file having
+the same name as the folder to include,
+to which is appended the extension of interest.
+A module get included once and subsequent
+inclusions of the same module are ignored;
+it effectively remove the need for
+include-guards in a module's header file.
+The exports of modules instantiated at runtime
+are used to resolve imports.
+When a matching .lyc file exist and is included,
+its non-nested functions/operators automatically
+define functions/operators declared within
+its corresponding .lyh file.
+
+If the include is a .lyx file, the file
+is parsed as an xml template where anything
+between the character sequences "<%" and "%>"
+must be preprocessor directives or code, while
+anything on the outside become the content
+of a double quoted string to output; except
+for symbols prefixed with $ or within ${} .
+
+
+
+ifdef, ifndef, else, elifdef, elifndef, endif
+---------------------------------------------
+The above preprocessor directives are used
+to conditionally determine, based on whether
+a macro was defined, whether to compile
+a chunk of code.
+
+The use of conditional preprocessor directives
+start by one of the directives: `ifdef, `ifndef
+and is to be terminated by the directive `endif;
+alternatives can be introduced using the preprocessor
+directives `else, `elifdef, `elifndef.
+
+The preprocessor directives `ifdef, `ifndef, `elifdef
+and `elifndef are to be followed by a macro name which
+will be tested on whether it was previously defined. ei:
+
+	`ifdef MACRONAME
+	myfunc1();
+	`else
+	myfunc2();
+	`endif
+
+In the above example, myfunc1() is compiled
+if the macro MACRONAME was defined, otherwise
+myfunc2() is compiled.
+
+	`ifndef MACRONAME
+	myfunc1();
+	`else
+	myfunc2();
+	`endif
+
+In the above example, myfunc1() is compiled if
+the macro MACRONAME was not defined, otherwise
+myfunc2() is compiled.
+
+The preprocessor directives `elifdef, `elifndef
+perform the same tests as the preprocessor directives
+`ifdef, `ifndef respectively and are only used
+to introduce alternatives just as `else has been used. ei:
+
+	`ifndef MACRONAME
+	myfunc1();
+	`elifdef MACRONAME2
+	myfunc2();
+	`else
+	myfunc3();
+	`endif
+
+In the above example, myfunc1() is compiled if
+the macro MACRONAME was not defined, otherwise
+myfunc2() is compiled if MACRONAME2 is defined,
+otherwise myfunc3() is compiled.
+
+Note that the preprocessor directive `else
+can be ommitted and when used, it must be
+the last alternative.
+
+
+
+foreach, endfor
+---------------
+The above preprocessor directives
+are used to repeat chunks of code.
+
+The preprocessor directive `foreach is to be followed
+by a macro name that has not been previously defined,
+and one or more double quoted strings separated
+by spaces; the general semantic is as follow:
+
+	`foreach MACRONAME "string1" "string2"
+	Within the loop, MACRONAME will take the value
+	of each string each time around the loop.
+	MACRONAME is undefined at the end of the loop
+	and cannot be undefined for the duration of the loop.
+	`endfor
+
+The macro name used with the directive `foreach
+can only use digits and uppercase characters.
+Here after is an example of use:
+
+	`foreach UTYPE "uint" "mytype"
+	UTYPE changeendian(UTYPE n) {
+		
+		uint i = 0;
+		
+		while (i < sizeof(UTYPE)) {
+			retvar <<= 8;
+			retvar = retvar|(n&0xff);
+			n >>= 8;
+			++i;
+		}
+		
+		return;
+	}
+	`endfor
+
+In the above example, 2 overloaded functions are generated.
+The first one take as argument a uint and return a uint;
+the second one take as argument a mytype and return a mytype.
+
+Macro expansion is not done on the double quoted strings
+used with the preprocessor directive `foreach.
+
+
+
+abort
+-----
+The above preprocessor directive
+immediately abort the compilation,
+showing the entire line containing
+the directive; hence characters
+can be used right after the directive
+on the same line so that a descriptive
+message is shown when the line containing
+the abort directive is shown.

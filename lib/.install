@@ -1,0 +1,81 @@
+#!/bin/bash
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+set -xe
+
+# Make sure to run from within
+# the location of this script.
+cd $(dirname $0)
+
+P=""
+E=""
+
+GITCMDPREFIX="git clone https://github.com/"
+
+# Prevent git password prompting.
+export GIT_TERMINAL_PROMPT=0
+
+while true; do
+	
+	S=$1
+	D="$(dirname $1)"
+	
+	if [ "$D" != "." ]; then
+		if [ -d $P$D ]; then E="."; else E=""; fi
+		mkdir -p $P$D
+		pushd $P$D
+	fi
+	
+	if [ -z "$P" ]; then
+		GITCMD="${GITCMDPREFIX}lyricallang/$S"
+	else
+		GITCMD="${GITCMDPREFIX}$S"
+	fi
+	
+	until $GITCMD; do
+		
+		if [ "$D" == "." ]; then
+			break;
+		else
+			popd
+			[ -z "$E" ] && rm -rf $P$D
+		fi
+		
+		S=$D
+		D="$(dirname $D)"
+		
+		if [ "$D" != "." ]; then
+			if [ -d $P$D ]; then E="."; else E=""; fi
+			mkdir -p $P$D
+			pushd $P$D
+		fi
+		
+		if [ -z "$P" ]; then
+			GITCMD="${GITCMDPREFIX}lyricallang/$S"
+		else
+			GITCMD="${GITCMDPREFIX}$S"
+		fi
+	done
+	
+	if [ ! -d "$S" -a -z "$P" ]; then
+		P="_/"
+	else
+		break;
+	fi
+done

@@ -1,0 +1,1341 @@
+
+--------------------------------------------------------------------------
+Copyright (c) William Fonkou Tambe
+
+Permission is granted to copy, distribute and/or modify this document
+under the terms of the GNU Free Documentation License, Version 1.3
+or any later version published by the Free Software Foundation;
+with no Invariant Sections, no Front-Cover Texts, and no Back-Cover Texts.
+A copy of the license is included in the section entitled "GNU
+Free Documentation License".
+--------------------------------------------------------------------------
+
+
+
+Introduction
+------------
+Lyrical: Poetic expression of your logic.
+Build on the simplicity of the C programming
+language; and is in its implementation
+a better C and C++ done right.
+It also bring the ease of use
+that python's programmers enjoy (ei:
+- No Makefile or Linking needed
+	to combine separate modules.
+- Automatic installation of missing
+	modules at compile-time)
+while remaining C-like in its syntax.
+Its simplicity allow it to have
+a low learning curve.
+
+
+
+Comments
+--------
+Anything following the character '#' till the line end
+is a comment; similarly, anything wthin a block starting
+with #{ and ending with }# is a comment.
+
+
+
+Semi-colon
+----------
+Semi-colon can be ommitted if it is
+not used to separate two statements. ei:
+
+	void myfunc () { return }
+
+In the above example, semi-colon could be
+ommitted after the "return" statement since
+there was no other statements following.
+
+
+
+Preprocessor
+------------
+The preprocessor directives start by the character '`'.
+The full list of processor directives are:
+`include
+`define
+`enddef
+`undef
+`ifdef
+`ifndef
+`else
+`elifdef
+`elifndef
+`endif
+`foreach
+`endfor
+`abort
+
+The usage of all of the above directives
+is documented in preprocessor.txt.
+
+The preprocessor directive `include
+has the ability to automatically download
+missing modules during compilation; and
+because a module get included once with
+subsequent inclusions of the same module
+ignored, the need for include-guards
+in a module's header file is obsolete.
+
+
+
+Native types
+------------
+The native or built-in types of Lyrical are:
+
+void
+	This type can only be used to declare
+	pointers or to declare a function that
+	do not return anything.
+
+u8
+	Unsigned 8bits integer.
+
+u16
+	Unsigned 16bits integer.
+
+u32
+	Unsigned 32bits integer.
+
+u64
+	Unsigned 64bits integer.
+
+s8
+	Signed 8bits integer.
+
+s16
+	Signed 16bits integer.
+
+s32
+	Signed 32bits integer.
+
+s64
+	Signed 64bits integer.
+
+uint
+	Predeclared preprocessor macro
+	which expand to the unsigned
+	integer type which has the same
+	size as sizeof(void*).
+
+sint
+	Predeclared preprocessor macro
+	which expand to the signed
+	integer type which has the same
+	size as sizeof(void*).
+
+The signedness of an integer type matter
+when the compiler need to determine whether
+to do a sign or zero extension, or to determine
+which kind of less-than or greater-than comparison
+should be used, or to determine whether to do
+an arithmetical or logical left shift, or to
+determine whether to do an unsigned/signed
+multiplication/division.
+
+
+
+Numbers
+-------
+Unlike C where only decimal, hexadecimal and
+octal notations are available, Lyrical also
+support a binary notation for numbers. ei:
+
+Decimal:	234
+Hexadecimal:	0xaf13
+Octale:		0o12
+Binary:		0b101110
+
+The octale notation is different
+from C as it start with "0o".
+
+The first digit of a number in
+the decimal notation cannot be 0;
+it is helpful when converting
+C code to Lyrical in that such
+number will not be seen as
+a decimal number.
+
+Characters used in the hexadecimal
+notation must be lowercase.
+
+The type of a number is uint.
+
+
+
+Character, multi-character, string constants.
+---------------------------------------------
+
+The only escape sequences supported within
+a character, multi-character or string are:
+
+\n
+	Newline character.
+
+\t
+	Horizontal tab character.
+
+\xx
+	Byte value where xx is a two digits hexadecimal
+	number that translate to a byte value.
+	The maximum value of a two digits hexadecimal
+	number is ff which correspond to the maximum
+	value of a byte.
+
+\"
+	Double quote character.
+	Escape sequence useable only within
+	a string constant.
+
+\'
+	Single quote character.
+	Escape sequence useable only within
+	a character or multi-character constant.
+
+\\
+	Used to generate the character '\' itself.
+
+
+Multi-character constants implementation is similar to C. ei:
+uint c2 = 'abcd';
+
+In a multi-character constant such as 'abcde',
+only the least 2 significant bytes will be kept
+if the variable it is assigned to is 16bits;
+hence only 'de' will be kept.
+
+The type of a character or multi-character constant
+depend on the number of characters in the constant; ei:
+'a' will yield a "u8" type.
+'ab' will yield a "u16" type.
+'abc' or 'abcd' will yield a "u32" type.
+
+The above implementation of multi-character allow
+to seemlessly support unicode characters. ei:
+The character '€' yield a multi-character constant
+because it is encoded using 3bytes; hence using
+'€' and '\e2\82\ac' is exactely the same thing.
+
+The type of a string constant is: u8*
+
+A string constant can span multiple lines. ei:
+
+	void myfunc () {
+		u8* s = "This is 
+			a nice string 
+				spaning multiple lines";
+	}
+
+The above will yield the following string:
+"This is a nice string spaning multiple lines"
+Notice that the newline at the end of each line
+is not made part of the final constant string.
+With a constant string spanning multiple lines,
+any spaces that is needed between the end
+of a line and its next line, must be added before
+the newline and not at the beginning of the next line;
+
+Two or more string constants following
+each other yield a single string; ei:
+
+	u8* s = "This is " "a " "string";
+
+The above yield "This is a string".
+
+
+
+Symbol naming
+-------------
+The name of functions, variables, types and labels
+can only use lowercase characters and digits.
+
+Enum constants can only use uppercase characters and digits.
+
+A struct/pstruct/union member can have the same name
+as a keyword, previously declared type, variable,
+function or label because it cannot create conflicts.
+A label can have the same name as a type, variable
+or function within the same scope without conflicts.
+A type, variable and function cannot have
+the same name within the same scope.
+
+Unlike other programming languages, the character '_'
+cannot be used in the naming of a symbol; it is instead
+used by the preprocessor for concatenation.
+
+
+
+Type specification, arrays, pointer to function
+-----------------------------------------------
+New types beside native types are created
+using the keywords struct/pstruct/union or enum.
+
+In Lyrical, a type is specified in a single block starting
+with a type name followed by asterisks for pointers,
+bracket sets for arrays or paranthesis set for
+pointers to function and possibly ampersand
+when declaring a byref variable; the idea here
+is to keep type information together. ei:
+
+	mytype*[4] var;
+
+The above declare an array of 4 pointers to mytypes.
+When specifying an array, it is always necessary
+to specify its size. The size must be a constant integer number.
+A variable declared as mytype*[5] would be completely
+different because the declaration type do not have the same size.
+
+=== Arrays ===
+
+When declaring the size of each dimension of the array,
+the first dimension come first, then the second and so on.
+When accessing the array, the last dimension is specified first,
+then the second last and so on. ei:
+
+#Declare an array where x, y and z are constant integer numbers.
+uint[x][y][z] myarray;
+
+#Access an array where x, y and z are integer variables.
+myarray[z][y][x]; 
+
+Put another way, uint[x][y][z] mean that the first dimension has
+x blocks of sizeof(uint), the second dimension has y blocks of
+size x*sizeof(uint) and the third dimension has z blocks
+of size y*x*sizeof(uint).
+So now in order to address element in the entire block, it only
+make sens to start by selecting the zth block of size y*x*sizeof(uint),
+then selecting the yth block of size x*sizeof(uint) and finally
+the xth block of size sizeof(uint).
+
+When an array is passed as argument to a function,
+its entire content is duplicated.
+
+It is possible to use sub-dimensions of a an array for subsequent
+computation. ei: If I have a variable declared as:
+uint[4][5][2] myarray;
+I can call a function as follow:
+myfunc(myarray[1]);
+where the argument of the function should have been declared as:
+void myfunc(uint[4][5] arg);
+So only an element of the third dimension was indexed and
+passed as argument.
+
+=== Pointer to functions ===
+
+Unlike the C syntax for declaring a pointer to function, in Lyrical
+a pointer to function type is expressed in a single block;
+anything before the paranthesis set is the return type, and
+anything within the paranthesis are arguments of
+the function seperated by commas. ei:
+
+void(void*, uint, ...) myfuncptr;
+
+The above example declare a pointer to a function which
+do not return a value, is variadic and for which the first
+argument type is "void*" and the second argument type is "uint".
+
+When writing a pointer to function type, symbol name are allowed
+to be used after the placeholders for the type of each argument,
+although never used.
+It can help in making a source better understandable. ei:
+
+void(u8* filename, uint offset, u8* msg) ptrtofunc;
+
+The following is a less clearer declarative statement
+which could have been used. ei:
+
+void(u8*, uint, u8*) ptrtofunc;
+
+=== Compatibility between types ===
+
+The name of the source and destination types
+must match exactly to be compatible when
+passing a variable as argument to a function;
+but with the native operator '=', or when
+returning a variable, the type compatibility
+between the source and destination is checked as follow:
+- Native types are compatible between each other; ei:
+	The source can be u8 and the destination u16.
+- A destination type "void*" is compatible with any
+	source pointer type such as "uint*" or "uint(u8)".
+	Note that "void**" is compatible only with "void**".
+	Note also that a destination type "uint(void*)"
+	is compatible only with a source type "uint(void*)",
+	and the "void*" type used within the paranthesis
+	of the pointer to function type has no effect;
+	hence a destination type "uint(void*)" would not
+	be compatible with a source type "uint(u8*)".
+- Non-native types are compatible between
+	each other only if their name match.
+
+
+
+Type casting
+------------
+Unlike C/C++, casting in Lyrical do not do any conversion whatsoever;
+it is just a way to tell the compiler to temporarily treat a variable
+as if it was of the given type cast, much in the same way that
+in an "union", a memory location can be treated as the different
+types of the "union" fields.
+
+
+
+struct/pstruct/union
+--------------------
+The keywords struct/pstruct/union are used to create a new type; ei:
+
+	struct mytype {
+		
+		uint a;
+		uint b;
+	};
+
+The above example can be used as follow:
+
+	mytype[3]* myvar; # Declare a pointer to an array of 3 mytype type.
+
+When "struct" is used, its members follow each other and
+paddings are inserted as necessary to have them aligned.
+
+When "pstruct" is used, a packed structure is created where
+its members follow each other with no padding inserted to have them aligned.
+when using a packed structure, the compiler break an unaligned
+memory access into multiple aligned memory accesses.
+Although members of a pstruct may not be aligned,
+
+When "union" is used, its members occupy the same memory location.
+
+the sizeof() a struct/pstruct/union is always a powerof2, mainly
+so it can be correctly aligned when used within an array.
+
+Bitfields are allocated within an integer from
+the most-significant to the least-significant bit. ei:
+
+	struct mybitfield {
+		
+		u16 a :4;
+		u16 b :5;
+		u16 c :7;
+		
+	} test;
+
+	test.a = 2;
+	test.b = 31;
+	test.c = 0;
+
+The bits in the variable test would be arranged as follows:
+0010111110000000
+aaaabbbbbccccccc
+
+Bitfields can only be used with a struct/pstruct and not with an union.
+It do not make sens to use bitfields within an union.
+
+It is possible to declare a hidden member of a struct/pstruct/union;
+it take space in the struct/pstruct/union, but has no member name. ei:
+
+	struct mytype {
+		
+		uint; # Hidden member.
+		
+		# In the creation of the hidden member below,
+		# The struct definition must have a name,
+		# otherwise it will be an anonymous struct.
+		struct myothertype {
+		
+		}; # Hidden member.
+	};
+
+A struct/pstruct/union can be declared without being defined;
+and when that is the case, it cannot be used as an inheritance basetype,
+nor can it be used to declare a variable, nor may its members be accessed
+since they are undefined; however, its pointer type may be used. ei:
+
+	# Declaring two struct without definition.
+	struct bert;
+	struct wilma;
+
+	# Defining the struct.
+	struct bert {
+		# Only a pointer to
+		# struc wilma can be used.
+		wilma* w;
+	};
+
+	# Defining the struct.
+	struct wilma {
+		# Since bert has been defined,
+		# it can be used for declaration.
+		bert b;
+	};
+
+A struct/pstruct/union can be based-off of another type
+which must have been defined; and when that is the case,
+the resulting struct/pstruct/union inherit all the methods
+of the basetype; but the fields of the basetype can only
+be accessed through casting, using the basetype,
+a variable declared using the inheriting type; ei:
+
+	struct mytype : mybasetype {
+		...
+	}
+
+In the above example, mytype will be based-off
+of mybasetype, and inherit all of its methods.
+
+The inheriting type can have the same name as
+a previously defined basedtype from a parent scope.
+
+A function or operator which take at least one argument
+is a method of the type of its first argument.
+
+It is possible to inherit from "void", which
+is useful to define an empty struct/pstruct/union
+which do not inherit any methods; ei:
+
+	struct emptytype : void {};
+
+since a variable/argument cannot be defined
+using the type "void", there is certainly
+no methods to inherit from "void".
+
+
+
+enum
+-----
+The keyword enum is used to create a new type
+with named values defined by the programmer.
+
+An enum type is compatible only with another
+enum type of the same name; in other words when
+passing an enum as an argument to a function,
+the enum type of the function argument must be the same.
+Similarly when assigning an enum to another enum using
+the assign native operator, the enum types must match.
+
+Internally, enum values are sizeof(uint) wide
+and the following native operators will operate
+on enums of the same type in the same manner as
+they would on native types:
+< <= > >= == != ~ = & &= ^ ^= | |= << <<= >> >>=
+Note that the right shift is a logical shift as
+oppose to an arithmetic shift.
+Note also that beside the operators == != every
+other operator are bitwise operators.
+The result of the operators == != is a variable of type uint
+which is either 0 or 1 for false or true respectively.
+The result of the operators ~ = & &= ^ ^= | |= is
+a variable having the same enum type as the arguments.
+The result of the operators << <<= >> >>=
+is a variable having the same enum type as
+the first argument; the second argument of
+such operators always has a native type.
+
+An enum typed variable is useable with the switch()
+statement, provided that each case within the switch()
+block use the enumerated values from the definition
+of the enum otherwise an error is thrown.
+
+An enum typed variable cannot be tested using
+the operators "&&" "||" "?:" or the control
+statements if(), while(), do while().
+
+An enum typed variable can internally have a value that
+do not correspond to any of the enumerated values from
+the definition of the enum; that can be the case for
+the result of a native operation; but it will not cause
+any issue because the allowable values of an enum type
+are checked only when used as input to an operator or
+function, but do not dictate what the output value of
+an operator or function should be. ei:
+if (var == ENUMVALUE); here the variable var is of
+an enum type which has ENUMVALUE as one of its value,
+but the value of var may not be a value within
+the allowable values of its enum type, but that
+do not prevent from testing whether the value of var
+is equal to a particular enum value.
+
+If a value is not given for an enum element,
+its value is the value of the previous
+enum element incremented by 1.
+
+If the value of the first enum element
+is not given, its value is 0.
+
+Example of definition of an enum:
+
+	enum typename {
+		
+		VAL1, 			#This value will be 0
+		VAL2,			#This value will be 1
+		VAL3	10,		#This value will be 10
+		VAL4	0b1100,		#This value will be 12
+		VAL5	10,		#This value will be 10
+		VAL6,			#This value will be 11
+		VAL7,			#This value will be 12
+		
+	} varname1, varname2;
+
+
+The elements of an anonymous enum have
+a "uint" type just like numbers. ei:
+
+	enum {
+		CONST1 10,
+		CONST2 3,
+	};
+
+The above declare named values
+that have a "uint" type just
+like numbers.
+
+Unlike struct/pstruct/union, an enum must
+always be defined when declared.
+
+
+
+switch() block
+--------------
+The body of a switch() block in Lyrical has a syntax
+different from what is found in other C-like languages.
+Each case within the switch() block is a block within
+braces, and once the instructions within a block
+are done executing, execution do not fall through
+to the next case block, but continue after the end
+of the switch() block.
+If there is more than one value used with a case,
+they must be separated by a comma. ei:
+
+	switch(expression) {
+		
+		case 1, 2 {
+			# Case block instructions.
+		}
+		
+		case 3 {
+			# Case block instructions.
+		}
+		
+		default {
+			# Case block instructions.
+		}
+	}
+
+The value of each case must be
+an expression which result in a constant.
+The type of the case constant must match
+the type of the switch() expression.
+
+Note that unlike if()else, switch() guaranty
+equal access time for all its cases.
+
+
+
+Initialization
+--------------
+Initialization can be done when declaring a variable
+or for an unnamed variable within an expression.
+
+When declaring a variable, initialization is done using
+either the assignment operator "=", or using a method call,
+or using a block within braces containing colon separated
+expressions initializing a struct/pstruct/union or array.
+
+The assignment operator '=' allow to initialize a variable
+using the return value of an expression; the method call
+allow to initialize a variable using a function for which
+it is the first argument. ei:
+
+	# Initialization using the assignment operator "=".
+	uint var = someexpression;
+
+	# Initialization using a method call.
+	# The declared variable is passed as
+	# first argument of the function called.
+	window mainwin.init("This is a new window");
+
+If the declaration prefix "static" was used,
+the initialization is done only once for
+the entire duration of the program.
+
+The initialization syntax for a block within braces
+for initializing an array, struct/pstruct/union,
+native type or enum is as follow:
+
+	# Initialization syntax initializing an array.
+	mytype[16] var {
+		
+		func(), # The result of calling func() initialize the 1st element.
+		
+		v, # Variable v is used to initialize the 2nd element.
+		
+		= v, # The assignment operator '=' is used to initialize the 3rd element.
+		
+		.anotherfunc(), # Method call which initialize the 3rd element.
+		
+		# In this example, each element
+		# of the array is a struct that I can
+		# initialize using the initialization syntax
+		# used for struct/pstruct/union.
+		{
+			.field1.init(),
+			.field2 = 12
+		},
+		
+		# when initializing an array using a block
+		# within braces, it is also possible to specify
+		# the array element to initialize as shown below.
+		
+		[5] = var, # Assign var to the 6th element.
+		
+		v # Variable v is used to initialize the next element which is the 6th element.
+		
+		[13].init(), # Method call which initialize the 14th element.
+	};
+
+In the above initialization syntax, the variable
+is followed directly by an opening brace and
+within the braces, each colon separated expression
+is expected to yield the same type as the type of
+each element of the array, otherwise an error is returned.
+
+	# Initialization syntax initializing a struct/pstruct/union.
+	mystruct var {
+		
+		.field1 = 10,
+		
+		.field2.init(),
+		
+		.field3 {
+			.subfield1 = 1,
+			.subfield2.anotherinit()
+		},
+		
+		# This field is an array, and I can
+		# initialize it using the initialization
+		# syntax for arrays.
+		.field4 {
+			0, 5, someintegervar, somefunc()
+		}
+	};
+
+In the above initialization syntax, the variable
+is followed directly by an opening brace, and
+within the brace each expression start with
+a dot followed by the name of the field to initialize;
+and the initialization of the field is done either
+by using the same initialization syntax, or the
+initialization syntax for arrays, or by using
+a method call, or by using the assignment operator.
+
+	# Initialization syntax initializing native type or enum.
+	myenum var {ENUMVAL};
+
+In the above initialization syntax, the variable
+is followed directly by an opening brace,
+and within the brace an expression that yield
+the same type as the type of the variable being
+initialized is expected.
+
+Compound literals which look like a cast containing
+an initializer which initialize an unnamed variable.
+They are created using a block within braces that follow
+the same syntax as previously described when doing
+initialization during the declaration of a variable. ei:
+
+	i = (mytype {
+		.field1.init(),
+		.field2 = 12
+	}) + j;
+	
+As shown in the above initialization, an unamed variable
+is created within an expression when after an opening paranthesis,
+a type specification is used followed by an initialization
+block within braces.
+
+
+
+Byref variables
+---------------
+Byref variables are pointers that are automatically
+dereferenced by the compiler; their reference can
+be modified at any time using the prefix operator '&'
+to change the value of the pointer that was automatically
+dereferenced by the compiler.
+
+Example of initialization of a byref variables:
+
+	uint& var = &i;
+
+After initialization, the reference of the byref variable
+is changed using the prefix operator '&' :
+
+	&var = 0xa12201ff;
+
+Below is an example of function declaration where
+the argument will be passed by reference:
+
+	void myfunc(uint*& arg);
+
+uint*& arg, mean that, the argument will be
+passed by reference; so in fact it is:
+
+	void myfunc(uint** arg);
+
+but the compiler will automatically get the address
+of the argument and pass it to the function.
+
+A struct/pstruct/union cannot have byref elements;
+the field of a struct/pstruct/union can only
+be a pointer or non-pointer, since a struct
+or union describe a memory region.
+
+
+
+Functions and operators
+-----------------------
+Lyrical provide the following function/operator features:
+
+- Function and operator overloading:
+	The argument of the functions declared below
+	are similar and will not be allowed to be declared
+	in the same scope since they will respond to
+	the same call(It also apply to operators):
+	
+	void f(mytype*& arg);
+	void f(mytype* arg);
+	uint f(mytype* arg, ...);
+	
+	Native operations that exclusively use native types
+	or pointer types as argument cannot be overloaded.
+
+- Nested functions:
+	Lyrical support nested functions.
+	Nested functions are useful for dividing procedural tasks
+	into sub tasks which are only meaningful locally.
+	It avoids cluttering other parts of the program with functions,
+	variables, etc... unrelated to those parts.
+	Nested function may also contain local variables, constants, type
+	and functions encapsulated in the same nested manner; this may
+	further enhance the code structuring possibilities.
+	It should be avoided to call a nested function through
+	its address after its containing function has exited,
+	otherwise erratic behavior will occur; similarly it should
+	be avoided to call a nested function through its address after
+	its containing scope has exited, unless the nested function
+	do not reference any of the variables from the scope exited.
+
+- Calling a function/method/operator:
+	The method of an object is a function for which
+	the first argument is of the same type as the object;
+	hence calling a function that take at least one argument
+	is a method call where the first argument of the function call
+	is the object. ei:
+	myvar.myfunc();
+	In the above example, myvar will be passed as the first
+	argument of the function myfunc().
+	The following has the exact same result as above:
+	myfunc(myvar);
+	
+	The following method call syntax is possible only
+	if myptrtofunc is a declared function and cannot be
+	a variable pointer to function:
+	myvar.myptrtofunc();
+	
+	When a function/method/operator do not return a value,
+	its first argument become the return value,
+	and is used in subsequent computations. ei:
+		
+		# Declaration of function which do not return
+		# a variable and take an argument by reference.
+		void mymethod(uint& var);
+		
+		# In the example below, the variable somevar get processed
+		# by mymethod(), then somevar + someothervar is done.
+		somevar.mymethod() + someothervar;
+		# The following has the exact same result as above
+		# except that the above is more legible.
+		mymethod(somevar) + someothervar;
+
+- Importing and exporting of functions:
+	Importing and exporting functions/operators
+	allow for the implementation of shared libraries.
+	An undefined non-nested function/operator
+	become an import, while the use of the keyword "export"
+	on a non-nested function/operator make it an export.
+	The keyword "export" can only be used when defining
+	a non-nested function/operator. ei:
+	
+		export void myfunc () {
+			return;
+		}
+	
+	All non-nested functions are by default
+	private to the module where they are defined;
+	the use of the keyword "export" with
+	non-nested functions make them public.
+	Variables cannot be exported nor imported;
+	accessing a variable within a shared library
+	need to be done through a function; which
+	enforce object oriented programming whereby
+	an object internal variables are accessible
+	only through its methods.
+
+- Miscaleneous:
+	When calling a function through a pointer-to-function,
+	the address of the variable pointer-to-function is passed
+	to the function and can be manipulated within the called
+	function using "this" which is a keyword that result
+	in a variable of type "void*".
+	
+	The address of a function can be obtained
+	by either using its name or using its signature
+	to single it out when it is overloaded. ei:
+		
+		# Get the address of myfunc(), and if overloaded,
+		# the one that was declared last is the one selected.
+		ptrtofunc = myfunc;
+		
+		# Get the address of myfunc() which
+		# take a uint and u8 as arguments.
+		ptrtofunc = myfunc(uint,u8);
+		
+		# To get the address of a function
+		# which do not take arguments, "void" must
+		# be used within paranthesis, otherwise
+		# a function call will be made; ei:
+		ptrtofunc = myfunc(void);
+	
+	The return variable can be directly accessed using
+	the variable retvar, as oppose to copying a result
+	into the return variable when using the keyword return.
+	retvar is a keyword and no other declared symbol
+	can use that name.
+	The variable retvar is only accessible within the definition
+	of a function or operator which can return a variable.
+	
+	With all native operators except comparison native operators,
+	the type of the result is the type of the first argument.
+	With comparison native operators, the type of the result is uint
+	and the value of the result is either 0 or 1.
+	
+	With the shift native operators, if the first operand is
+	a signed native type such as s8 or s16, an arithmetic
+	shift is used, otherwise a logical shift is used.
+	Note that shifting to the left is the same for both
+	arithmetic and logical shifts, so the same instruction
+	is generated.
+	
+	A null argument, (uint)0, is used as the last argument
+	when calling a variadic function; that additional null argument
+	is used to mark the end of variadic arguments which allow a function
+	to know where the variadic arguments ended in the stack.
+	In order for variadic argument to be used, at least one argument
+	to the function should be used in the declaration; the address of
+	that argument is used to read any additional argument that
+	is passed to the function by simply adding the correct offset
+	to the address of the first argument; all stack arguments
+	are aligned to sizeof(uint); ei:
+	void myfunc(uint arg, ...);
+	If the above function is called as follow: myfunc(4, 18, 1);
+	the second argument can be read by doing *(&arg+1);
+	the third argument can be accessed by doing *(&arg+2);
+	
+	In Lyrical, declaring a function with no argument between
+	the paranthesis mean that the function do not take arguments;
+	in C, it mean that the arguments are not known and the same function
+	can be defined somewhere else and be given arguments, and in order
+	to declare a function which do not take arguments,
+	the keyword void must be used. ei:
+	uint func(void); #Confusing syntax.
+	In Lyrical where function overloading is a feature, it is
+	imperatif to insure that if there is no argument declared
+	between the paranthesis, it mean that the function declared
+	do not take arguments.
+	
+	In C the following declaration syntax is permitted:
+	uint myf(uint arg), myotherfunc(uint jj); #It will declare 2 functions returning uint.
+	In Lyrical it is not permitted because it is a bad syntax;
+	it is cleaner to declare the 2 functions in 2 different statements.
+	
+	In both the example below, GCC fail to return the correct
+	value which should be 3, but instead return 4.
+	In fact each argument value of a function or operator
+	should have its value kept at the time of the pushing, and
+	not get affected if another argument modify its value.
+	When pushing an argument, the Lyrical compiler always
+	duplicate its value; hence it insure that the argument value
+	used for a function or operator be the value that
+	it had when pushed.
+	
+		# First example using a function.
+		uint main () {
+			uint func(uint b1, uint b2) {
+				return b1 + b2;
+			}
+			
+			uint a = 1;
+			return func(a, ++a);
+		}
+
+		# Second example using an operator.
+		uint main () {
+			uint a = 1;
+			a += ++a;
+			return a;
+		}
+
+
+
+Operator precedence
+-------------------
+The precedence and associativity of operators
+is similar as in C, with the difference that
+the associativity of all binary operators
+is right-to-left; however the associativity
+of the comma operator (which has the least
+precedence) remain left-to-right.
+
+The following list the precedence and associativity of operators.
+Operators are listed top to bottom, in descending precedence.
+
+---------------------------------------------------------------------------------------------
+Precedence	Operator	Description					Associativity
+---------------------------------------------------------------------------------------------
+1		++ -- 		Postfix increment and decrement 		Left-to-Right
+		()		Method/Function call
+		[]		Array subscripting
+		.		struct/union member access
+		->		struct/union member access through pointer
+---------------------------------------------------------------------------------------------
+2		++ --		Prefix increment and decrement			Right-to-Left
+		-		Unary minus
+		? ! ~		IsTrue, Logical NOT and bitwise NOT
+		(type)		Type cast
+		*		Dereference
+		&		Address-of
+---------------------------------------------------------------------------------------------
+3		* / %		Multiplication, division, and remainder 	Right-to-Left
+---------------------------------------------------------------------------------------------
+4		+ -		Addition and subtraction			Right-to-Left
+---------------------------------------------------------------------------------------------
+5		<< >>		Bitwise left shift and right shift		Right-to-Left
+---------------------------------------------------------------------------------------------
+6		< <=		For relational operators < and ≤ respectively	Right-to-Left
+		> >=		For relational operators > and ≥ respectively
+---------------------------------------------------------------------------------------------
+7		== !=		For relational = and ≠ respectively		Right-to-Left
+---------------------------------------------------------------------------------------------
+8		&		Bitwise AND					Right-to-Left
+---------------------------------------------------------------------------------------------
+9		^		Bitwise XOR					Right-to-Left
+---------------------------------------------------------------------------------------------
+10		|		Bitwise OR (inclusive or)			Right-to-Left
+---------------------------------------------------------------------------------------------
+11		&&		Logical AND					Right-to-Left
+---------------------------------------------------------------------------------------------
+12		||		Logical OR					Right-to-Left
+---------------------------------------------------------------------------------------------
+13		?:		Ternary conditional				Right-to-Left
+				The expression between ? and :
+				is parsed as if parenthesized;
+				its precedence relative to ?: is ignored.
+---------------------------------------------------------------------------------------------
+14		=		Assignment					Right-to-Left
+		+= -=		Assignment by sum and difference
+		*= /= %=	Assignment by product, quotient, and remainder
+		<<= >>=		Assignment by bitwise left shift and right shift
+		&= ^= |=	Assignment by bitwise AND, XOR, and OR
+---------------------------------------------------------------------------------------------
+15		,		Comma						Left-to-right
+---------------------------------------------------------------------------------------------
+
+Precedence can be explicitly applied using paranthesis; ei:
+	var1 * ((var2 / var3 - var4) + var5);
+Without paranthesis, the above would instead be evaluated as:
+	(var1 * (var2 / var3)) - (var4 + var5);
+
+
+
+throw, catch and labels
+-----------------------
+Unlike in other languages, Lyrical's throw and catch
+are meant to provide a way to escape early
+from recursions or from one or more nested functions
+without having to return from each of the recursed functions
+or from each of the nested functions; resulting in a behavior
+that is identical to the exception mechanism found in
+C++, Java and other languages.
+
+Labels are local to a function and used through
+the keyword goto, while catchable-labels have the additional
+capability that they can be used by nested functions
+through the keyword "throw".
+
+When catchable-label is thrown, the compiler simply
+adjust appropriately the register stack pointer and
+make a jump to the corresponding catchable-label.
+
+As illustrated below, when calling myfunc(),
+the functions myfunc1(), myfunc2(), myfunc3() and
+myfunc4() which are nested get called, and within
+myfunc4(), execution escape to the label mylabel which
+is declared within myfunc(), and it is not necessary
+to return from myfunc4(), myfunc3(), myfunc2() and myfunc1()
+before resuming execution at the catchable-label mylabel.
+
+	uint myfunc () {
+		
+		catch mylabel;
+		
+		uint myfunc1 () {
+			
+			uint myfunc2 () {
+				
+				uint myfunc3 () {
+					
+					uint myfunc4 () {
+						
+						throw mylabel;
+					}
+					
+					myfunc4();
+				}
+				
+				myfunc3();
+			}
+			
+			myfunc2();
+		}
+		
+		myfunc1();
+		
+		mylabel:
+		
+		return;
+	}
+
+Unlike the similar capability provided by gcc with
+the use of the keyword __label__, the use of the Lyrical
+keyword "catch" do not have to be the very first
+declaration statement of the function. The keyword
+"catch" can be used anywhere within the function
+as long as it is declared before any nested function
+where the catchable-label will be used.
+
+Labels are scope-able, in other words, two labels
+can have the same name within a function as long
+as they are within two different scopes.
+When goto-ing to a label with a name used
+by more than one label within the same function
+but in different scope, goto is done to
+the label in the closest scope, searching
+a scope first then its sub-scopes.
+When throw-ing to a catchable-label with a name
+used by more than one catchable-label within
+the same parent function but in different
+scope, throw is done to the catchable-label
+in the closest scope.
+
+The label scope-able feature is very useful with macros;
+if the macro contain nested loops or nested functions,
+a goto or throw can be useful for breaking out of them;
+however, a label whose scope is the whole function
+couldn't be used. If a macro declaring a label was
+to be expanded multiple times in one function,
+the label would be declared multiple times in that function.
+Hence being able to scope labels avoid conflicts.
+
+On a side note, the asm instruction afip
+is used to obtain the address of a label.
+
+
+
+Portable assembly programming
+-----------------------------
+Using assembly allow a programmer to have a precise
+control over what processor instructions will be
+generated; which typically result in a compact and
+faster program.
+
+Lyrical implement a portable assembly instruction
+set which will run on any architecture supported
+by the compiler while providing the ability
+to encode architecture specific instructions.
+
+To use assembly in Lyrical, an asm block is used.
+Within the asm block, regular label can be created
+allowing the programmer to jump to specific sections
+of the assembly code.
+In addition expressions which use function
+or operator call, can be used as argument
+of assembly instructions.
+
+Registers are specified using the character '%'
+followed by the register number.
+The register %0 is always reserved
+as the stack pointer register.
+
+Here below is an example of use of assembly:
+
+	asm {
+		loop:
+		
+		#The instruction below will modify the stack pointer register.
+		add %0, somevar+var, anothervar.somefunc();
+		
+		j loop;
+	}
+
+Regisers used within an asm block get
+automatically reserved and their value
+preserved for the remainder the asm block.
+
+Machine code can be generated within
+an asm block by starting the line
+by a string instead of an instruction.
+Note that the machine code could
+use any registers even the ones that
+were not reserved, which could result
+in undefined behaviors.
+
+Here below is an example which
+include a machine code generated.
+
+	asm {
+		
+		ori %3, var1, 0;
+		ori %4, var2, 0;
+		
+		# Machine code
+		# manually encoded.
+		"\fe\23\a1\cd";
+	}
+
+The full set of portable assembly instructions
+useable within an asm block is documented
+in the file "assembly.txt" .
+
+
+
+Miscaleneous features
+---------------------
+The stack is used only if functions are used.
+hence %0, which is the stack pointer register,
+will not be used in an executable object
+that do not use functions.
+
+Pointer arithmetic on the type "void*" is done
+the same way as it is done for the type "u8*".
+
+When a misaligned access is done using
+the dereference of a constant address,
+the compiler is smart enough to break
+the misaligned access into multiple
+aligned accesses. ei: (*(u32*)0x1001) = 1234;
+The above would be a misaligned access
+that would generate four 8bits store instructions
+instead of a single 32bits store instruction.
+
+The type of the result from sizeof() is uint.
+
+The Lyrical compiler generate code that is free
+from stack overflowing, as the code generated
+is able to grow and shrink its stack as needed.
+The automatic stack allocation feature allow
+the use of deep recursions where the stack growth
+is limited by the memory available on the system.
+The stack is grown or shrinked in single page (4096 bytes)
+amounts to minimize waist and in most cases will
+make it easy for the kernel memory allocator to find
+an available page to allocate to the program when
+there is not much memory left on the system.
+
+The entry point of the program start outside of
+any function; unlike C where the program start
+executing from the main() function.
+
+The middle operand in the short-circuit operator ?: expression
+may be omitted when its condition expression is of a native type or pointer;
+and if the first operand is nonzero, the result is the value
+of the condition expression. Hence, the expression:
+	x ?: y
+has the value of x if it is nonzero; otherwise, the value of y.
+The above example is perfectly equivalent to:
+	x ? x : y
+In this simple case, the ability to omit the middle operand is not especially useful.
+It become useful when the first operand do, or may (if it is a preprocessor macro),
+contain a side effect. Then repeating the operand in the middle would perform
+the side effect twice. Omitting the middle operand use the value already computed
+without the undesirable effects of recomputing it. 
+
+There is the prefix operator: "?"; It is called
+operator "istrue"; it work just like the operator "!",
+but return 1 if the argument is non-null and zero if
+the argument is null. The native operators "?" and "!"
+are very useful operator for testing, because they generate
+only one instruction; Without those operators, it would
+have been necessary to use if() or "&&" "||" operators,
+which use more instructions.
+
+Unlike C/C++, a struct/pstruct/union or enum cannot be
+defined while declaring the arguments of a function.
+
+The compiler implement a feature called predeclared
+variables which allow a compiled program to access
+a named memory location that is not declared within
+the program but declared prior to the compilation
+of the program.
+The argument predeclaredvars of lyricalcompile() is
+used to pass the definition of predeclared variables.
+
+The compiler implement a feature that make functions
+share the same stackframe so as to have very fast
+function calls because there is no instructions needed
+to prepare the stackframe of the function to call;
+hence doing so provide performance matching the direct
+inlining of the body of a function as implemented
+in other compilers; directly inlining the body of
+a function increase the size of the compiled result.
+
+The keyword "volatile" is not used; the compiler assume
+that when the kernel load an executable into memory,
+the pages into which the program is loaded are private
+to the address space of the thread; any subsequent
+thread-fork from that initial thread will keep the same
+pages private and duplicate them using copyonwrite.
+Since all local and global variables declared by
+the programmer or created by the compiler reside in
+non-volatile memory locations that are private to
+the thread, they are guarantied to never be shared
+with another thread.
+For that reason, the keyword volatile found in C
+is not implemented in Lyrical.
+But note that internally, the compiler will treat
+as volatile, dereferenced variable and variable for
+which the address was obtained in order to prevent aliasing.
+
+The keyword "static" is used only
+with variables for which it is needed
+that they keep their value when leaving
+the scope in which they were declared;
+Initialization of such variable, when
+used, is done only once for the entire
+duration of the program.
+
+
+
+Good programming practices
+---------------------------
+Variables should be declared as close as possible
+to the location where they will be used for
+the first time; this allow a reader to have an idea
+of where the variable started being used, effectively
+reducing the cognitive burden on the reader.
+
+Lines of comments should not be too long
+and should be broken into multiple lines
+to make it easier for the reader eye
+to track the next line to read.

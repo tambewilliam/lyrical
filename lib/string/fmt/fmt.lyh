@@ -1,0 +1,74 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`include "../hdr"
+
+# Generate a string from the string
+# given by the argument fmt, substituting
+# anywhere format specifiers are used.
+# For each format specifier used,
+# other than %%, there must be
+# corresponding arguments in
+# the order in which they are used
+# in the string argument fmt.
+# A format specifier syntax is
+# %[|][pad][width]specifier where
+# items in brackets are optionals,
+# and "specifier" is either
+# i for a signed decimal number,
+# d for an unsigned decimal number,
+# x for an unsigned hexadecimal number,
+# o for an unsigned octal number,
+# b for an unsigned binary number,
+# c for a character,
+# s for a null-terminated string.
+# "[width]" when used, is a decimal value
+# which is the minimum number
+# of characters for the substitute
+# of the format specifier;
+# if the value to substitute has
+# less characters, pading is done.
+# ei: "Value is :%10d".stringfmt(22);
+# yield "Value is :        22";
+# "[pad]" when used, is one or more characters,
+# that cannot be 1 thru 9 or any of the specifier
+# characters, unless escaped using '\';
+# the first character is used for padding instead
+# of the default space character, and the subsequent
+# characters are padding overwrites between
+# paddings and the value to substitute. ei:
+# "Value is %-> [10d]".stringfmt(22);
+# yield "Value is -----> [22]";
+# Another example where escaping must be used:
+# ei: "Value is %-> 0\\x10x]".stringfmt(22);
+# yield "Value is ----> 0x16]";
+# The backslash character itself is used
+# by escaping it using backslash as well;
+# ei: "Value is %-> \\\\10d]".stringfmt(22);
+# yield "Value is -----> \22]";
+# [|] when used, the value that substitute
+# the format specifier is left aligned
+# (instead of right aligned) within
+# the given field [width];
+# ei: "value is : %10d".stringfmt(22);
+# yield "value is : 22        ";
+# when [pad] is used, it is applied to the right;
+# ei: "value is : [>%|-<]10d".stringfmt(22);
+# yield "value is : [>22<]------";
+string stringfmt (u8* fmt, ...);

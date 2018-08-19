@@ -1,0 +1,42 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`include "../hdr"
+
+# These functions return 0 if the strings given
+# as argument are not equal, otherwise 1 is returned.
+# stringiseq() take into account the characters' case
+# while stringiseqnocase() do not.
+# Functions for which the last argument is sz compare
+# the amount of characters given by the argument sz
+# ignoring their null-terminating character.
+uint stringiseq (string s1, string s2);
+uint stringiseq (string s1, u8* s2);
+uint stringiseq (u8* s1, u8* s2);
+uint stringiseq (u8* s1, u8* s2, uint sz);
+uint stringiseq (u8* s1, uint s1sz, string s2);
+uint stringiseq (u8* s1, uint s1sz, u8* s2);
+uint stringiseq (u8* s1, uint s1sz, u8* s2, uint s2sz);
+uint stringiseqnocase (string s1, string s2);
+uint stringiseqnocase (string s1, u8* s2);
+uint stringiseqnocase (u8* s1, u8* s2);
+uint stringiseqnocase (u8* s1, u8* s2, uint sz);
+uint stringiseqnocase (u8* s1, uint s1sz, string s2);
+uint stringiseqnocase (u8* s1, uint s1sz, u8* s2);
+uint stringiseqnocase (u8* s1, uint s1sz, u8* s2, uint s2sz);

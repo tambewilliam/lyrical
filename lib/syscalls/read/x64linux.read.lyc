@@ -1,0 +1,43 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`locdef RAX 1
+`locdef RCX 3
+`locdef RDX 4
+`locdef RDI 6
+`locdef RSI 7
+`locdef R11 11
+`locdef SYSCALL "\0f\05"
+
+# Read from file.
+uint read (uint fd, u8* ptr, uint sz) {
+	
+	asm {
+		li %RAX, 0; # syscall read().
+		cpy %RDI, fd;
+		cpy %RSI, ptr;
+		cpy %RDX, sz;
+		# The instruction syscall
+		# destroy %RCX and %R11.
+		cpy %RCX, %RCX; # No instructions will be generated; the compiler will flush %RCX if dirty.
+		cpy %R11, %R11; # No instructions will be generated; the compiler will flush %R11 if dirty.
+		SYSCALL;
+		cpy retvar, %RAX;
+	}
+}

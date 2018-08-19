@@ -1,0 +1,40 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+# When this macro is defined,
+# an actual copy is done when
+# duplicating a string instead
+# of using mmrefup().
+#`define STRINGNOREFCNT
+
+# Struct used to manipulate
+# an array of characters.
+struct string {
+	# Pointer to a null-terminated
+	# array of characters allocated
+	# through mmalloc().
+	# It must be modified only through
+	# string() functions, and freed
+	# only through mmrefdown() as
+	# it may be multi-referenced.
+	u8* ptr;
+};
+
+# Null value useful for initialization.
+`define NULLSTRING (string{.ptr = 0})

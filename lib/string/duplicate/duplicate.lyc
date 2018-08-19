@@ -1,0 +1,68 @@
+
+# ---------------------------------------------------------------------
+# Copyright (c) William Fonkou Tambe
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# ---------------------------------------------------------------------
+
+
+`include "mm" "byt" "../sz"
+
+# These functions return a string duplicate.
+
+string stringduplicate (u8* s, uint sz) {
+	# +1 account for the null-terminating character.
+	u8* ptr = mmalloc(sz+1);
+	
+	bytcpy(ptr, s, sz);
+	
+	ptr[sz] = 0;
+	
+	retvar.ptr = ptr;
+}
+
+string stringduplicate (string s) {
+	
+	if (!s.ptr) return NULLSTRING;
+	
+	`ifdef STRINGNOREFCNT
+	s = stringduplicate(s.ptr, mmsz(s.ptr)-1);
+	#else
+	mmrefup(s.ptr);
+	`endif
+	
+	return s;
+}
+
+string stringduplicate (u8* s) {
+	# +1 account for the null-terminating character.
+	uint ssz = stringsz(s)+1;
+	
+	u8* ptr = mmalloc(ssz);
+	
+	bytcpy(ptr, s, ssz);
+	
+	retvar.ptr = ptr;
+}
+
+string stringduplicate (u8 c) {
+	# +1 account for the null-terminating character.
+	u8* ptr = mmalloc(2);
+	
+	ptr[0] = c;
+	
+	ptr[1] = 0;
+	
+	retvar.ptr = ptr;
+}

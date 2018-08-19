@@ -1,0 +1,51 @@
+The Lyrical programming language was designed
+with the goal of building on the simplicity of
+the C programming language, while adding useful
+features found in C++ and python.
+
+Its features are:
+- Just like with Python, write and run; no Makefile
+	or Linking needed to combine separate modules.
+- Automatic download and installation of missing
+	modules at compile-time.
+- Dynamic stack allocation
+	allowing for infinite recursion
+	for as long as there is memory available.
+- Type inheritance.
+- Byref variable.
+- Function and Operator overloading.
+- Nested functions.
+- Exception handling through "throw" and "catch",
+	which allow to return at once from deeply
+	nested and/or recursive function calls.
+
+Find a full description of features in:
+src/lib/lyrical/doc/features.txt
+
+Build prerequisite:
+apt install build-essential git 
+
+To install x86 32bits libraries in a 64bits installation:
+sudo apt install libc6:i386 lib32z1 lib32z1-dev
+
+For help on build choices:
+make
+
+To build:
+make x86
+
+To install:
+make install
+
+A simple program would be:
+--------------------
+#!/bin/lyrical
+
+`include "stdio"
+
+"hello world\n".stdout();
+--------------------
+After saving the above example in helloworld.lyc,
+(or any other filename of your choice) execute it running:
+chmod +x helloworld.lyc
+./helloworld.lyc
